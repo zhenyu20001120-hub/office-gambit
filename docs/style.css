@@ -22,8 +22,8 @@
   --font-serif: "Source Han Serif SC", "Noto Serif CJK SC", STSong, "Microsoft YaHei", serif;
 }
 
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; height: 100%; }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; max-width: 100%; overflow-x: hidden; }
 body {
   background: var(--bg-deep);
   color: var(--text-1);
@@ -45,7 +45,7 @@ body {
   mix-blend-mode: screen;
 }
 
-.screen { position: relative; width: 100%; height: 100vh; }
+.screen { position: relative; width: 100%; max-width: 100%; height: 100vh; }
 
 /* ---------------- 开局选择 ---------------- */
 #start-screen { display: flex; align-items: center; justify-content: center; padding: 24px; overflow: auto; }
@@ -72,7 +72,7 @@ body {
 .radio input { accent-color: var(--amber); width: 16px; height: 16px; }
 #seed-input {
   background: #14110F; border: 1px solid rgba(200,146,58,.4); color: var(--text-1);
-  border-radius: 6px; padding: 8px 10px; font-size: 14px; width: 200px; font-family: var(--font-ui);
+  border-radius: 6px; padding: 8px 10px; font-size: 14px; width: 200px; max-width: 100%; font-family: var(--font-ui);
 }
 #seed-input:focus { outline: 2px solid var(--amber); }
 .start-tip { color: var(--text-2); font-size: 12px; margin-top: 14px; }
@@ -94,27 +94,29 @@ body {
 .day-label { font-family: var(--font-serif); font-size: 20px; font-weight: 700; color: var(--text-1); }
 .goal-label { font-size: 13px; color: var(--text-2); }
 .goal-label b { color: var(--glow); }
-.bars { display: flex; gap: 18px; margin-top: 8px; }
-.bar-block { display: flex; align-items: center; gap: 8px; }
-.bar-name { font-size: 12px; color: var(--text-2); min-width: 56px; }
-.bar { width: 240px; height: 12px; background: #2A241D; border-radius: 6px; overflow: hidden; border: 1px solid rgba(0,0,0,.4); }
+.bars { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 8px; }
+.bar-block { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bar-name { font-size: 12px; color: var(--text-2); min-width: 56px; flex: 0 0 auto; }
+/* 流式：桌面仍为 240px 上限，窄屏自动压缩 */
+.bar { flex: 0 1 240px; width: 240px; max-width: 100%; min-width: 48px; height: 12px; background: #2A241D; border-radius: 6px; overflow: hidden; border: 1px solid rgba(0,0,0,.4); }
 .bar-fill { height: 100%; width: 0; border-radius: 6px; transition: width .35s ease, background .35s; }
 .bar-val { font-family: monospace; font-size: 13px; color: var(--text-1); min-width: 30px; }
 .meta-line { font-size: 12px; color: var(--text-2); margin-top: 6px; }
 
 /* ---------------- 主区 ---------------- */
-#main-row { display: flex; flex: 1 1 auto; min-height: 0; }
-.stage { flex: 1 1 auto; overflow-y: auto; padding: 18px 20px; }
-.roster { width: 300px; flex: 0 0 auto; border-left: 1px solid rgba(200,146,58,.18); background: #181410; overflow-y: auto; padding: 10px; }
+#main-row { display: flex; flex: 1 1 auto; min-height: 0; min-width: 0; }
+.stage { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding: 18px 20px; }
+#sidebar { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.roster { width: 300px; max-width: 100%; flex: 1 1 auto; min-height: 0; border-left: 1px solid rgba(200,146,58,.18); background: #181410; overflow-y: auto; padding: 10px; }
 .log { height: 170px; flex: 0 0 auto; border-top: 1px solid rgba(200,146,58,.18); background: #1B1712; overflow-y: auto; padding: 8px 10px; font-size: 12px; color: #C8BFA8; }
 
 /* ---------------- 面板 / 卡牌 ---------------- */
-.panel { max-width: 760px; }
+.panel { width: 100%; max-width: 760px; }
 .panel-title { font-family: var(--font-serif); font-size: 22px; font-weight: 700; color: var(--glow); margin: 4px 0 10px; }
 .panel-desc { font-size: 15px; color: var(--text-1); margin: 0 0 14px; line-height: 1.6; }
 
 .card {
-  max-width: 760px; background: var(--bg-panel); border: 1px solid rgba(200,146,58,.3);
+  width: 100%; max-width: 760px; background: var(--bg-panel); border: 1px solid rgba(200,146,58,.3);
   border-radius: 12px; padding: 16px 18px; box-shadow: 0 4px 16px rgba(0,0,0,.55);
 }
 .card-head { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(200,146,58,.18); padding-bottom: 8px; }
@@ -126,6 +128,7 @@ body {
 .options { display: flex; flex-direction: column; gap: 8px; }
 .opt-btn {
   display: flex; align-items: center; gap: 10px; text-align: left;
+  width: 100%; min-width: 0;
   background: #2A241D; color: var(--text-1); border: 1px solid rgba(200,146,58,.5);
   border-radius: var(--r); padding: 10px 12px; font-family: var(--font-ui); font-size: 14px;
   cursor: pointer; transition: filter .12s, background .12s, border-color .12s;
@@ -135,7 +138,7 @@ body {
 .opt-btn.danger { background: #3A201C; border-color: rgba(214,69,61,.6); }
 .opt-btn.danger:hover { border-color: var(--danger); }
 .opt-num { font-family: serif; font-size: 16px; color: var(--glow); flex: 0 0 auto; }
-.opt-label { flex: 1 1 auto; }
+.opt-label { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; }
 .opt-eff { flex: 0 0 auto; font-family: monospace; font-size: 12px; color: var(--text-2); }
 
 /* ---------------- 结算列表 ---------------- */
@@ -169,8 +172,9 @@ body {
 .stat-k { color: var(--text-2); }
 .stat-v { color: var(--glow); font-weight: 600; }
 .reveal-h { font-family: var(--font-serif); font-size: 20px; color: var(--glow); margin: 12px 0 8px; }
-.reveal-table { max-width: 880px; border: 1px solid rgba(200,146,58,.3); border-radius: 10px; overflow: hidden; }
+.reveal-table { width: 100%; max-width: 880px; border: 1px solid rgba(200,146,58,.3); border-radius: 10px; overflow: hidden; }
 .reveal-row { display: grid; grid-template-columns: 1.3fr 1fr .9fr 1.4fr .8fr .8fr .8fr; gap: 6px; padding: 7px 10px; font-size: 13px; align-items: center; }
+.reveal-row > span { min-width: 0; overflow-wrap: break-word; }
 .reveal-row.head { background: var(--bg-panel); color: var(--text-2); font-weight: 600; }
 .reveal-row + .reveal-row { border-top: 1px solid rgba(255,255,255,.05); }
 .reveal-row.me { background: #2A2417; font-weight: 600; }
@@ -178,3 +182,153 @@ body {
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: #3a3128; border-radius: 5px; }
 body { scrollbar-color: #3a3128 #14110F; }
+
+/* =====================================================================
+ * 响应式：移动端竖屏适配（只改排版，不改配色/文案/数值）
+ * ≤768px 平板与中大手机；≤480px 小手机。策略：
+ *   1) 桌面的「双栏 + 三个固定滚动区」改为单栏整页纵向滚动，顶栏 sticky；
+ *   2) 资源条由 240px 固定宽改为整行流式；
+ *   3) 名册由 300px 侧栏改为 auto-fill 网格；
+ *   4) 所有可点元素 min-height 44px，正文 ≥16px。
+ * ===================================================================== */
+@media (max-width: 768px) {
+  /* overflow 写在根元素上（会传播到视口）：既裁掉横向溢出，又不打断 sticky 顶栏 */
+  html {
+    height: auto; min-height: 100%;
+    overflow-x: hidden; overflow-y: auto;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    height: auto; min-height: 100%;
+    overflow: visible;              /* 覆盖桌面端的 overflow:hidden，改为整页纵向滚动 */
+    font-size: 16px;
+    -webkit-tap-highlight-color: rgba(232,192,112,.18);
+  }
+
+  .screen { height: auto; min-height: 100vh; min-height: 100dvh; }
+
+  /* ---- 开局选择屏 ---- */
+  #start-screen { align-items: flex-start; justify-content: flex-start; padding: 16px 12px 28px; }
+  .start-card { padding: 18px 16px; border-radius: 12px; }
+  .game-title { font-size: 26px; letter-spacing: 1px; }
+  .game-subtitle { font-size: 13px; }
+  .start-intro { font-size: 16px; line-height: 1.65; }
+  .legend { gap: 8px 14px; }
+  .legend-item { font-size: 14px; }
+  .pick-group { margin: 16px 0; }
+  .pick-label { font-size: 15px; }
+  .pick-opts { gap: 10px; }
+  /* 单选做成可点胶囊，避免误触 */
+  .radio {
+    min-height: 44px; padding: 6px 12px; font-size: 16px;
+    border: 1px solid rgba(200,146,58,.28); border-radius: 22px;
+    background: rgba(20,17,15,.55);
+  }
+  .radio input { width: 20px; height: 20px; }
+  #seed-input { width: 100%; min-height: 44px; font-size: 16px; }
+  .start-tip { font-size: 13px; line-height: 1.6; }
+
+  /* ---- 按钮触控尺寸 ---- */
+  .continue-btn { min-height: 44px; font-size: 16px; padding: 12px 20px; }
+  .continue-btn.big { font-size: 17px; min-height: 48px; }
+
+  /* ---- 主界面：整页纵向滚动 ---- */
+  #game-screen { height: auto; min-height: 100vh; min-height: 100dvh; max-height: none; max-width: 100%; }
+  #topbar { position: sticky; top: 0; z-index: 20; padding: 8px 12px; }
+  .top-row { flex-wrap: wrap; gap: 2px 8px; }
+  .day-label { font-size: 18px; }
+  .goal-label { flex: 1 1 100%; font-size: 12px; line-height: 1.5; }
+  .bars { flex-direction: column; gap: 6px; margin-top: 6px; }
+  .bar-block { width: 100%; }
+  .bar-name { min-width: 4.6em; }
+  /* 资源条：固定 240px -> 撑满剩余宽度 */
+  .bar { flex: 1 1 auto; width: auto; max-width: none; height: 10px; }
+  .bar-val { min-width: 2.6em; text-align: right; }
+  .meta-line { font-size: 12px; line-height: 1.5; }
+
+  #main-row { flex-direction: column; min-height: 0; }
+  .stage { flex: 1 1 auto; overflow: visible; padding: 14px 12px 18px; }
+
+  /* ---- 卡牌 / 面板 ---- */
+  .panel-title { font-size: 20px; }
+  .panel-desc { font-size: 16px; }
+  .card { padding: 14px; border-radius: 10px; }
+  .card-title { font-size: 19px; }
+  .card-text { font-size: 16px; }
+  .card-cat { font-size: 14px; }
+
+  /* ---- 选项列表（含联席会议投票 9 人列表） ---- */
+  .options { gap: 10px; }
+  .opt-btn { min-height: 44px; font-size: 16px; padding: 12px; line-height: 1.5; }
+  .opt-num { font-size: 17px; }
+  .opt-eff { font-size: 12px; }
+  .settle-row { font-size: 14px; padding: 6px 8px; }
+
+  /* ---- 名册：侧栏 -> 网格；日志：底部矮滚动区 ---- */
+  #sidebar { flex: 0 0 auto; }
+  .roster {
+    width: 100%; flex: 0 0 auto;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 6px 10px; align-content: start;
+    /* 随整页滚动，避免嵌套滚动区抢触摸手势 */
+    max-height: none; overflow: visible; padding: 10px 12px;
+    border-left: none; border-top: 1px solid rgba(200,146,58,.18);
+  }
+  .roster-head { grid-column: 1 / -1; font-size: 14px; }
+  .actor-row { padding: 6px; border-radius: 8px; background: rgba(255,255,255,.02); }
+  .actor-row + .actor-row { border-top: none; }
+  .actor-name { font-size: 14px; }
+  .actor-status, .actor-fac { font-size: 12px; }
+  .log { height: auto; min-height: 84px; max-height: 26vh; font-size: 13px; padding: 8px 12px; }
+
+  /* ---- 结局屏 ---- */
+  #end-screen { padding: 18px 12px 28px; }
+  .end-title { font-size: 24px; }
+  .end-sub { font-size: 14px; line-height: 1.6; }
+  .end-stats { gap: 8px 16px; }
+  .reveal-h { font-size: 18px; }
+  .reveal-row { grid-template-columns: 1.1fr .8fr .6fr 1fr .55fr .55fr .6fr; gap: 4px; padding: 6px 8px; font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  #start-screen { padding: 12px 10px 24px; }
+  .start-card { padding: 16px 13px; }
+  .game-title { font-size: 22px; letter-spacing: 0; }
+  .game-subtitle { font-size: 12px; }
+  /* 四派系图例：两列自适应，避免长条溢出 */
+  .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); gap: 8px 10px; }
+  .continue-btn { width: 100%; }
+
+  #topbar { padding: 8px 10px; }
+  .day-label { font-size: 17px; }
+  .bar-name { min-width: 4.2em; font-size: 12px; }
+  .stage { padding: 12px 10px 16px; }
+  .card { padding: 12px; }
+  .card-title { font-size: 18px; }
+
+  /* 选项：数字+文案一行，效果值换到第二行右对齐 */
+  .opt-btn { flex-wrap: wrap; row-gap: 4px; align-items: flex-start; padding: 11px 12px; }
+  .opt-num { line-height: 1.5; }
+  .opt-label { flex: 1 1 60%; }
+  .opt-eff, .opt-sub { flex: 1 1 100%; text-align: right; color: var(--text-2); }
+  .opt-sub { font-size: 13px; }
+
+  .roster { grid-template-columns: 1fr; padding: 10px; }
+  .log { max-height: 24vh; padding: 8px 10px; }
+
+  #end-screen { padding: 16px 10px 24px; }
+  .end-title { font-size: 21px; }
+  .stat-line { font-size: 13px; }
+  /* 揭示表：7 列 -> 4 列自动折行（表头同步折行，列仍对齐） */
+  .reveal-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 6px; padding: 7px 8px; font-size: 12px; }
+}
+
+/* 极窄屏（≈320px）兜底：进一步压缩非关键留白 */
+@media (max-width: 360px) {
+  .start-card { padding: 14px 11px; }
+  .game-title { font-size: 20px; }
+  .legend { grid-template-columns: 1fr; }
+  .bar-name { min-width: 3.8em; }
+  .opt-btn { padding: 11px 10px; gap: 8px; }
+  .reveal-row { font-size: 11px; padding: 6px; }
+}

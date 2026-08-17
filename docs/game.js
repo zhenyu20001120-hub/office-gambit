@@ -1053,6 +1053,9 @@ function present(node, autoMs) {
   if (DOM && DOM.stage) DOM.stage.appendChild(node);
   renderTop(STATE);
   renderRoster(STATE);
+  // 仅视口行为：新面板出现时回到顶部（桌面 stage 自身滚动；移动端整页滚动）
+  if (DOM && DOM.stage) DOM.stage.scrollTop = 0;
+  if (typeof window !== "undefined" && window.scrollTo) window.scrollTo(0, 0);
   if (autoMs && node._finish) setTimeout(() => { if (node._finish) node._finish(); }, autoMs);
 }
 function pickFromPanel({ title, desc, options, autoMs }) {
@@ -1377,6 +1380,7 @@ function showEndScreen(result) {
   DOM.game.hidden = true;
   DOM.end.hidden = false;
   DOM.end.innerHTML = "";
+  if (typeof window !== "undefined" && window.scrollTo) window.scrollTo(0, 0);
   const outcomeText = { win: "胜利", lose: "失败", observer: "旁观结局" }[result.outcome] || result.outcome;
   const outcomeColor = { win: "#E8C070", lose: "#D6453D", observer: "#B8A988" }[result.outcome] || "#F0E6D2";
 
@@ -1469,6 +1473,7 @@ function onStart() {
   DOM.start.hidden = true;
   DOM.end.hidden = true;
   DOM.game.hidden = false;
+  if (typeof window !== "undefined" && window.scrollTo) window.scrollTo(0, 0);
   CURRENT_CONTROLLER = new GUIController();
   runGame(difficulty, TUNING.NUM_ACTORS, playerTier, CURRENT_CONTROLLER, seed)
     .catch((err) => {
