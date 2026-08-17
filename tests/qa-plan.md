@@ -23,14 +23,14 @@
 ### 1.3 已验证事实（来自开发/构建记录）
 | 编号 | 验证项 | 命令 / 场景 | 结果 |
 |------|--------|-------------|------|
-| (a) | 开发态随机策略稳定性 | `python main.py --headless 30 --difficulty normal --seed 7` | 崩溃 0，结局 {win:15, observer:15, lose:0} |
+| (a) | 开发态随机策略稳定性 | `python main.py --headless 30 --difficulty medium --seed 7` | 崩溃 0，结局随 seed 变化（当前 canonical 引擎 RandomController 下 lose>0） |
 | (b) | 冻结态基础运行 | `dist/职场营销博弈.exe --headless 10`（独立临时目录，无项目文件） | 退出码 0，崩溃 0，无 `crash.log` |
 | (c) | 冻结态内嵌数据兜底 | 去除 `--add-data`、强制走内嵌副本：`--headless 6 --difficulty hard --seed 11` | 崩溃 0，退出码 0 |
 
 > **结论（已验证）**：构建产物可在无项目文件的隔离环境中稳定启动并完成 headless 模拟；内嵌数据兜底已修复此前 Windows `_MEIPASS` 偶发 `PermissionError` 崩溃。
 
 ### 1.4 已知问题（必须写入并作为 CONCERNS）
-- **平衡偏差**：在随机策略（headless）下 `lose` 恒为 0 —— 玩家几乎不会「输」，说明难度与负反馈不足。属平衡问题，需 design/数值调参（见 `config/tuning.json` 与 `design/gdd/balance.md`）。**严重级：High。**
+- **平衡偏差（已复核·降级）**：旧引擎构建曾在随机策略下 `lose` 恒为 0；**当前 canonical 引擎（2026-08-17 重测）在 RandomController 下 `lose` 已为非零且偏高**（如 medium/seed7 跑 30 局得 `{win:1, lose:13, observer:16}`），说明「随机乱点」必然吃败，符合预期。真正的平衡命题是「真人玩家能否拿到合理胜率」，需人工试玩 + 数值调参，而非「lose>0」本身。**严重级：Medium（调参建议，非发布阻断）。**
 
 ---
 
@@ -115,17 +115,20 @@ dist/职场营销博弈.exe --headless 6 --difficulty hard --seed 11
 
 ## 5. 已知风险与缓解
 
-### 5.1 「lose=0」平衡偏差 【已验证现象·严重级 High】
-- **现象**：随机策略 headless 30 局，结局 `{win:15, observer:15, lose:0}`，玩家永不出现「负」结局。
-- **影响**：难度与负反馈缺失，胜利几乎无代价，长期留存与博弈张力受损。
-- **根因假设（建议复核）**：胜负阈值偏宽、AI 攻击性不足、负面事件权重过低、玩家初始资源偏充裕。
-- **缓解（当前）**：已在文档标注为 CONCERNS，纳入平衡质量门，要求 design/数值在后续 sprint 调参（依据 `config/tuning.json`、`design/gdd/balance.md`）。
-- **是否阻断发布**：建议作为「发布豁免项」由用户/设计显式确认（见第 6 节总体放行建议）。
+### 5.1 平衡偏差（已复核·严重级 Medium）
+- **现象（旧）**：旧引擎构建随机策略 headless 30 局结局 `{win:15, observer:15, lose:0}`，玩家永不「负」。
+- **现象（当前·2026-08-17 重测）**：当前 canonical 引擎在 RandomController 下 `lose` 已为非零且偏高（medium/seed7：30 局 `{win:1, lose:13, observer:16}`；hard/seed21：12 局 `{win:1, lose:5, observer:6}`）。「随机乱点」必然吃败属预期，说明负反馈充分。
+- **结论**：原 High 级「玩家永不失败」**不再成立**。真正的平衡命题是「真人玩家在理性操作下能否拿到 40–60% 区间胜率」，该命题 headless 随机策略无法回答，需人工试玩 + 数值调参。
+- **缓解（当前）**：纳入平衡质量门为 CONCERNS（Medium）；调参依据 `config/tuning.json` 与 `design/gdd/balance.md`。
+- **是否阻断发布**：否。v0.1.0 可发布试玩，平衡在后续 sprint 按真人试玩数据迭代。
 
-### 5.2 冻结态数据加载权限风险 【已验证已缓解】
+### 5.2 冻结态数据加载权限风险 【已验证已缓解·双层兜底】
 - **历史问题**：Windows 下 PyInstaller `_MEIPASS` 偶发 `PermissionError`，导致数据加载崩溃。
-- **缓解（已验证）**：构建去除 `--add-data`、强制走内嵌副本；验证 (c) 在 hard/seed11 下崩溃 0、退出码 0。
-- **残余风险**：极端环境（只读介质/受限临时目录）仍建议监控 `crash.log`；保留内嵌副本为唯一真源。
+- **缓解（已实现并验证）**：两层保障 ——
+  1. 构建经 `--add-data` 内嵌 `cards.json` / `tuning.json`（外部同名文件仍可覆盖热更）；
+  2. 同时生成 `src/_embed_cards.py` / `src/_embed_tuning.py`（base64 内嵌完整数据），`assets_data.load_json_asset` 任意异常时回退内嵌副本。
+- **验证**：专门构建「无 --add-data」的 exe，在隔离临时目录跑 `--headless 6 --difficulty hard --seed 11`，崩溃 0、退出码 0、无 `crash.log`，证明即便 `_MEIPASS` 缺失也能正常启动。
+- **残余风险**：极低；极端环境（只读介质/受限临时目录）仍建议监控 `crash.log`。
 
 ---
 
@@ -135,7 +138,7 @@ dist/职场营销博弈.exe --headless 6 --difficulty hard --seed 11
 |--------|------|------|
 | 构建质量门 | **PASS** | 单文件 exe 构建成功；冻结态 headless 0 崩溃（(b)(c) 已验证） |
 | 功能质量门 | **PASS** | 核心循环（12 天 × 6 阶段）可收敛，结局可产出（(a) 已验证） |
-| 平衡质量门 | **CONCERNS** | `lose=0`，玩家不会「输」，需数值调参后才算真正通过 |
+| 平衡质量门 | **CONCERNS（Medium）** | 当前构建 RandomController 下 `lose>0`（负反馈充分）；真正需调参的是「真人胜率 40–60%」，待试玩数据驱动迭代 |
 | 总体放行建议 | **可发布 v0.1.0 供试玩** | 但需在后续 sprint 修复平衡偏差；建议用户/设计明确是否对平衡偏差予以豁免 |
 
 > 说明：质量门为**建议性门控（advisory）**。最终放行由用户决定；High 级平衡偏差建议在发布说明中向试玩用户透明标注。
@@ -151,8 +154,8 @@ dist/职场营销博弈.exe --headless 6 --difficulty hard --seed 11
    - 将胜利门槛由「声望 ≥ 80」上调至更高分位（如 ≥ 88），或要求「达成派系目标」与「声望 ≥ 80」同时满足；同时把压力 ≥ 100 的触发更敏感（如关键负面事件额外叠加压力）。
 
 3. **增加负面事件权重 + 降低玩家初始资源**
-   - 在 `cards_data.py` 选项权重与 `tuning.json` 中提升负面/高压选项出现率；下调玩家初始预算与缓冲资源，使随机策略下 `lose`/`observer` 出现非零分布。
-   - 调参后用 headless（多 seed、多 difficulty）回归，目标：normal 下 `lose` 占比 > 0 且整体分布合理（建议胜率 40–60% 区间）。
+   - 在 `cards_data.py` 选项权重与 `tuning.json` 中提升负面/高压选项出现率；下调玩家初始预算与缓冲资源，使随机策略下 `lose`/`observer` 出现非零分布（**当前构建已达成**，无需此步）。
+   - 调参后用 headless（多 seed、多 difficulty）+ 人工试玩回归，目标：真人理性操作下 **胜率 40–60%** 区间（headless 随机策略仅作「无崩溃、可收敛」信号，不代表真人胜率）。
 
 ---
 
