@@ -28,14 +28,9 @@ jobs:
         run: pip install pyinstaller     # 安装单文件打包工具
 
       - name: Build single-file EXE with PyInstaller
-        run: >-
-          pyinstaller --onefile --noconsole --paths src
-          --hidden-import cards_data --hidden-import tuning_data
-          --name "职场营销博弈"
-          --add-data "design/cards/cards.json;cards.json"
-          --add-data "config/tuning.json;tuning.json"
-          main.py
-        # 说明：Windows 下 --add-data 用分号(;)分隔源与目标；产物输出到 dist/职场营销博弈.exe
+        run: pyinstaller build.spec
+        # 使用项目内 build.spec（已含 --add-data 与 _embed_cards/_embed_tuning 兜底 hidden-imports），
+        # 保证 CI 产物与本地 build.bat 完全一致；产物输出到 dist/职场营销博弈.exe
 
       - name: Upload EXE as build artifact
         uses: actions/upload-artifact@v4
