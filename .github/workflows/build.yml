@@ -12,6 +12,8 @@ jobs:
   build:
     name: Build on Windows
     runs-on: windows-latest     # 矩阵：仅 Windows（PyInstaller 产物为 .exe）
+    permissions:
+      contents: write           # allow action-gh-release to attach exe
     strategy:
       matrix:
         os: [windows-latest]
