@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>职场营销博弈 · Office Marketing Gambit</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="stress-overlay"></div>
+
+  <!-- ============ 开局选择 ============ -->
+  <section id="start-screen" class="screen">
+    <div class="start-card">
+      <h1 class="game-title">职场营销博弈</h1>
+      <div class="game-subtitle">Office Marketing Gambit · 12 天派系暗战</div>
+      <p class="start-intro">
+        你是某集团合资公司的暗线代表。在 12 天里，于<b>会议 / 饭局 / 汇报 / 背刺</b>中推进本派系的隐藏目标，
+        同时别让别人看穿你。派系随机分配，只有你自己知道——记得靠行为去推断他人。
+      </p>
+
+      <div class="legend">
+        <div class="legend-item"><span class="dot" style="background:#B23A2E"></span>锐盟 · 吞并份额</div>
+        <div class="legend-item"><span class="dot" style="background:#2E5FB2"></span>衡明 · 守住客户</div>
+        <div class="legend-item"><span class="dot" style="background:#7A3BA2"></span>星海 · 上位夺权</div>
+        <div class="legend-item"><span class="dot" style="background:#C8923A"></span>长安 · 平稳落地</div>
+      </div>
+
+      <div class="pick-group">
+        <div class="pick-label">难度</div>
+        <div class="pick-opts">
+          <label class="radio"><input type="radio" name="difficulty" value="easy" /><span>轻松</span></label>
+          <label class="radio"><input type="radio" name="difficulty" value="medium" checked /><span>普通</span></label>
+          <label class="radio"><input type="radio" name="difficulty" value="hard" /><span>困难</span></label>
+        </div>
+      </div>
+
+      <div class="pick-group">
+        <div class="pick-label">你的档位</div>
+        <div class="pick-opts">
+          <label class="radio"><input type="radio" name="tier" value="employee" /><span>员工</span></label>
+          <label class="radio"><input type="radio" name="tier" value="mid" checked /><span>中层</span></label>
+          <label class="radio"><input type="radio" name="tier" value="senior" /><span>高层</span></label>
+        </div>
+      </div>
+
+      <div class="pick-group">
+        <div class="pick-label">随机种子（可选，留空则随机）</div>
+        <div class="pick-opts">
+          <input id="seed-input" type="text" inputmode="numeric" placeholder="例如 12345" />
+        </div>
+      </div>
+
+      <button id="start-btn" class="continue-btn big">进入第 1 天 ▶</button>
+      <div class="start-tip">提示：情况牌每牌至少 4 个选项，可用键盘 1–6 选择。压力过高时屏幕边缘会泛红噪点。</div>
+    </div>
+  </section>
+
+  <!-- ============ 游戏主体 ============ -->
+  <section id="game-screen" class="screen" hidden>
+    <header id="topbar">
+      <div class="top-row">
+        <div id="day-label" class="day-label">第 1 天</div>
+        <div id="goal-label" class="goal-label"></div>
+      </div>
+      <div class="bars">
+        <div class="bar-block">
+          <span class="bar-name">声望</span>
+          <div class="bar"><div id="bar-influence" class="bar-fill"></div></div>
+          <span id="val-influence" class="bar-val">0</span>
+        </div>
+        <div class="bar-block">
+          <span class="bar-name">压力</span>
+          <div class="bar"><div id="bar-stress" class="bar-fill"></div></div>
+          <span id="val-stress" class="bar-val">0</span>
+        </div>
+        <div class="bar-block">
+          <span class="bar-name">预算</span>
+          <div class="bar"><div id="bar-cash" class="bar-fill"></div></div>
+          <span id="val-cash" class="bar-val">0</span>
+        </div>
+      </div>
+      <div id="meta-line" class="meta-line"></div>
+    </header>
+
+    <div id="main-row">
+      <div id="stage" class="stage"></div>
+      <aside id="sidebar">
+        <div id="roster" class="roster"></div>
+        <div id="log" class="log"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ 终局揭示 ============ -->
+  <section id="end-screen" class="screen" hidden></section>
+
+  <script src="tuning.js"></script>
+  <script src="cards.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
