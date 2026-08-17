@@ -1,0 +1,18 @@
+# 构建产物
+build/
+__pycache__/
+*.pyc
+*.pyz
+*.toc
+职场营销博弈.spec
+
+# 归档（历史遗留包，不进版本库）
+archive/
+
+# 工作区元数据
+.workbuddy/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp

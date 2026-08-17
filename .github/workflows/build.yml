@@ -1,0 +1,52 @@
+# 自动构建工作流：在发布（release）或推送 v* 标签时，为 Windows 构建单文件 exe 并上传产物。
+name: Build Windows EXE
+
+on:
+  release:
+    types: [created]            # 在 GitHub 创建 Release 时触发
+  push:
+    tags:
+      - 'v*'                    # 推送形如 v0.1.0 的标签时触发
+
+jobs:
+  build:
+    name: Build on Windows
+    runs-on: windows-latest     # 矩阵：仅 Windows（PyInstaller 产物为 .exe）
+    strategy:
+      matrix:
+        os: [windows-latest]
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4        # 拉取仓库源码
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'         # 与项目技术栈一致（Python 3.13）
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller     # 安装单文件打包工具
+
+      - name: Build single-file EXE with PyInstaller
+        run: >-
+          pyinstaller --onefile --noconsole --paths src
+          --hidden-import cards_data --hidden-import tuning_data
+          --name "职场营销博弈"
+          --add-data "design/cards/cards.json;cards.json"
+          --add-data "config/tuning.json;tuning.json"
+          main.py
+        # 说明：Windows 下 --add-data 用分号(;)分隔源与目标；产物输出到 dist/职场营销博弈.exe
+
+      - name: Upload EXE as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 职场营销博弈-windows-exe
+          path: dist/职场营销博弈.exe    # 作为可下载构件保留（即使非 Release 也保留）
+
+      - name: Attach EXE to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/职场营销博弈.exe   # 在 Release 页面直接附加上传 exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

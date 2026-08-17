@@ -1,0 +1,11 @@
+# 《职场营销博弈》依赖清单
+#
+# 零第三方运行依赖：本游戏仅使用 Python 3.11+ 标准库
+#   (tkinter / json / random / dataclasses / argparse / os / sys / math / threading)。
+# 因此运行时无需 pip install 任何包；PyInstaller 单文件离线可打包、离线可运行。
+#
+# PyInstaller 仅用于“打包”阶段，不属于运行依赖（见 build.spec / build_exe.py / build.bat）。
+# 仅当你要重新生成 exe 时才需要安装它：
+#   pip install pyinstaller
+#
+# 验证零依赖：grep 全部 src/*.py 的 import，除本项目扁平模块外只应出现标准库。
