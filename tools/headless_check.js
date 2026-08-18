@@ -1,4 +1,4 @@
-// 无头跑测：模拟浏览器 <script src> 共享全局，加载 tuning/cards/game，跑满 12 天确认不崩。
+// 无头跑测：模拟浏览器 <script src> 共享全局，加载 tuning/cards/game，跑满 60 个月（372 张嵌套卡）确认不崩。
 const fs = require("fs");
 const path = require("path");
 const ROOT = path.resolve(__dirname, "..", "web");
@@ -16,9 +16,9 @@ const api = globalThis.__api;
   const diffs = ["easy", "medium", "hard"];
   const tiers = [null, "employee", "mid", "senior"];
   let tc = 0, tg = 0;
-  // 单局示例：确认能跑到 day 12 并产出 result
+  // 单局示例：确认能跑到第 60 月并产出 result
   const ex = await api.runGame("medium", 9, "mid", new api.RandomController(), 777);
-  console.log(`示例单局：day=${ex.day} outcome=${ex.outcome} rating=${ex.rating} faction=${ex.factionAlias}/${ex.factionTier} subOk=${ex.subOk}`);
+  console.log(`示例单局：month=${ex.month} outcome=${ex.outcome} rating=${ex.rating} faction=${ex.factionAlias}/${ex.factionTier} subOk=${ex.subOk}`);
   console.log("reveal 行数:", ex.reveal.length, "log 行数:", ex.log.length);
   for (const d of diffs) for (const t of tiers) {
     const r = await api.runHeadless(20, d, 9, t, 12345);

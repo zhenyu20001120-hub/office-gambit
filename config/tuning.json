@@ -1,11 +1,11 @@
 {
   "version": "1.0",
   "comment": "《职场营销博弈》全部平衡/数值外置于此。策划改数不改代码。所有键缺失时引擎有兜底默认值。",
-  "DAY_MAX": 12,
+  "DAY_MAX": 60,
   "CARDS_PER_DAY_BASE": 3,
   "CARDS_PER_DAY_RAMP": { "1": 2, "2": 2 },
-  "ASSEMBLY_DAYS": [3, 6, 9, 12],
-  "NUM_ACTORS": 9,
+  "ASSEMBLY_DAYS": [6, 12, 18, 24, 30, 36, 42, 48, 54, 60],
+  "NUM_ACTORS": 12,
   "NUM_ACTORS_MIN": 7,
   "FACTIONS": {
     "FV_A": { "alias": "锐盟", "name": "华锐-西盟合资", "goal": "吞并份额", "color": "#B23A2E", "light": "#E2705A", "deep": "#5E1A14", "accent": "#F2C4A8", "glyph": "flame" },
@@ -141,7 +141,7 @@
     "network":     { "min": 0, "max": 100, "init": 50 }
   },
   "REIGN_SOFT_RESET": { "cash_penalty": 15, "debuff_days": 2, "debuff_gain_mult": 0.7 },
-  "ENERGY_DRIFT": { "start_day": 7, "stress_per_day": 1, "player_only": true },
+  "ENERGY_DRIFT": { "start_month": 7, "stress_per_day": 1, "player_only": true },
   "REIGN_VOTE": {
     "threat_perf_w": 0.4, "threat_net_w": -0.3,
     "low_net_threshold": 20, "low_net_vote_bonus": 0.5,

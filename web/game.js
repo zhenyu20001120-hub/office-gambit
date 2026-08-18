@@ -31,7 +31,16 @@ const PHASE_LABELS = {
 const CATEGORY_ICONS = {
   "背锅": "🪨", "站队": "🚩", "竞品": "⚔️", "绩效": "📊", "汇报": "📋",
   "团建": "🍻", "反腐": "🔍", "晋升": "📈", "客户": "🤝", "舆情": "📣",
-  "加班": "🌙", "会议": "🗓️",
+  "加班": "🌙", "会议": "🗓️", "入职": "🎓", "职场关系": "🕸️", "家庭": "🏠",
+  "审计": "🧾", "危机": "🚨", "调动": "🔄", "裁员": "✂️", "空降": "🪂",
+  "并购": "🤝", "年终奖": "🧧", "出差": "✈️", "挖角": "🕳️", "向上管理": "⬆️",
+  "投诉": "📞", "供应链": "🔗", "述职": "🎤", "借调": "📨", "师徒": "🧑‍🏫",
+  "离职": "🚪", "审批": "✍️", "数据": "📊", "饭局": "🍲", "举报": "📮",
+  "期权": "📈", "瓶颈": "🚧", "偶遇": "👀", "失误": "💥", "群聊": "💬",
+  "邮件": "📧", "批评": "⚠️", "生日": "🎂", "培训": "📚", "投票": "🗳️",
+  "对账": "⚖️", "系统": "💻", "体检": "🩺", "报销": "🧾", "表扬": "🌟",
+  "表白": "💌", "请假": "🙋", "八卦": "🗣️", "送礼": "🎁", "误会": "❓",
+  "聚餐": "🍱", "结局": "🏁",
 };
 const CATEGORY_ORDER = ["背锅", "站队", "竞品", "绩效", "汇报", "团建",
   "反腐", "晋升", "客户", "舆情", "加班", "会议"];
@@ -285,7 +294,7 @@ class Actor {
     this.performance = 50.0;
     this.network = 50.0;
     this.alive = true;
-    this.outDay = null;
+    this.outMonth = null;
     this.outCause = null;
     this.trust = {};       // idx -> [-100,100]，本角色对他人信任
     this.belief = {};      // idx -> [p_FV_A, p_FV_B, p_FV_C, p_FV_D]
@@ -309,13 +318,15 @@ class GameState {
     this.difficulty = difficulty;
     this.numActors = numActors;
     this.actors = [];
-    this.day = 1;
+    this.month = 1;
     this.phase = "morning";
     this.factionTrust = { FV_A: 0, FV_B: 0, FV_C: 0, FV_D: 0 };
     this.chaos = 0.0;
     this.clients = [];
     this.log = [];
     this.usedCards = new Set();
+    // 【月历】已用大事件集合，保证 60 张大事件在 60 个月里各出现恰好一次（scheduleMonth 依赖）
+    this.usedMajors = new Set();
     this.assembly = { accused: null, deflect: false, bribes: 0, playerBribed: [], defend: false };
     this.result = null;
     this.observer = false;
@@ -470,6 +481,17 @@ function initActorResources(a, d, isPlayer, rng) {
 
 /* ============================ 6. 抽牌算法（cards_data.py） ============================ */
 function loadCards() { return [CARDS, CARD_META]; }
+
+// 【月历】把内部 month 序号（1..60，1=2026年7月）换算为「第X年Y月」与「YYYY年M月」展示标签。
+// 公式：year = 2026 + floor((m-1)/12)，mon = 7 + ((m-1)%12)，mon>12 时 year+1、mon-12。
+function monthLabel(m) {
+  m = Math.max(1, Math.min(60, m | 0));
+  let year = 2026 + Math.floor((m - 1) / 12);
+  let mon = 7 + ((m - 1) % 12);
+  if (mon > 12) { year += 1; mon -= 12; }
+  const careerYear = Math.floor((m - 1) / 12) + 1;
+  return { year, mon, career: `第 ${careerYear} 年`, label: `${year}年${mon}月` };
+}
 function dayCurveWeights(day) {
   for (const bucket of TUNING.DAY_CURVE) {
     if ((bucket.days || []).includes(day)) return bucket.w || {};
@@ -559,6 +581,41 @@ function drawDayCards(state, day, n) {
   return drawn;
 }
 
+/* ============================ 6.5 月历式事件调度（60 月嵌套卡） ============================ */
+// 每月：从「未用过的大事件」里按 seed 随机抽 1 张（保证 60 张大事件各出现恰好一次）→
+// 依次渲染该大事件 + 其 4 张小事件（按 majorId 归属）→ 穿插 1~2 张随机事件（从 72 里随机，可重复）。
+// 全程复用现有 resolveCard 的 reign-card 左右选择路径与 applyChoice/check_edges/软重置/投票逻辑。
+function scheduleMonth(state) {
+  const camp = (typeof CAMPAIGN !== "undefined" && CAMPAIGN) || { majors: [], minors: [], randoms: [] };
+  const majors = camp.majors || [];
+  const minors = camp.minors || [];
+  const randoms = camp.randoms || [];
+
+  // 1) 抽一张未用过的大事件（seed 决定顺序，60 月各一次）
+  const remaining = majors.filter((m) => !state.usedMajors.has(m.id));
+  const major = remaining.length ? state.rng.choice(remaining) : (majors.length ? majors[0] : null);
+  if (!major) return [];
+  state.usedMajors.add(major.id);
+
+  // 2) 该大事件下的 4 张小事件（按 majorId 取，保持源顺序）
+  const myMinors = minors.filter((mn) => mn.majorId === major.id).slice(0, 4);
+
+  // 3) 穿插 1~2 张随机事件（可重复）
+  const rcount = 1 + (state.rng.random() < 0.5 ? 1 : 0);
+  const myRandoms = [];
+  for (let i = 0; i < rcount; i++) {
+    if (randoms.length) myRandoms.push(state.rng.choice(randoms));
+  }
+
+  // 顺序：大事件 → 小事件1 → (随机?) → 小事件2 → 小事件3 → (随机?) → 小事件4
+  const order = [major];
+  for (let i = 0; i < myMinors.length; i++) {
+    order.push(myMinors[i]);
+    if (i === 1 && myRandoms[0]) order.push(myRandoms[0]);
+    if (i === 3 && myRandoms[1]) order.push(myRandoms[1]);
+  }
+  return order;
+}
 /* ============================ 7. 启发式 AI（ai.py） ============================ */
 function wInf(a) { return 0.6 + 0.9 * (a.personality.ambition ?? 0.5); }
 function wStr(a) {
@@ -930,24 +987,25 @@ async function resolveCard(state, card, controller) {
 }
 async function phaseMorning(state, controller) {
   await controller.showInfo(state, "morning",
-    `第 ${state.day} 天 · 晨会：昨日全局冲突度 ${state.chaos.toFixed(0)}，` +
+    `第 ${state.month} 月 · 晨会：昨日全局冲突度 ${state.chaos.toFixed(0)}，` +
     `你的声望 ${state.player().influence.toFixed(0)} / 压力 ${state.player().stress.toFixed(0)}。`);
-  state.logMsg(`[D${state.day}] 晨会：冲突度 ${state.chaos.toFixed(0)}`);
+  state.logMsg(`[M${state.month}] 晨会：冲突度 ${state.chaos.toFixed(0)}`);
 }
 async function phaseDayCards(state, controller) {
-  const ramp = TUNING.CARDS_PER_DAY_RAMP[String(state.day)] || TUNING.CARDS_PER_DAY_BASE;
-  const n = state.day > 2 ? TUNING.CARDS_PER_DAY_BASE : ramp;
-  const drawn = drawDayCards(state, state.day, n);
-  for (const card of drawn) {
-    state.logMsg(`[D${state.day}] 情况牌《${card.title}》（${card.category}）`);
+  // 【月历】每月 = 1 大事件 + 4 小事件 + 1~2 随机事件，全走现有 resolveCard 的 reign-card 路径。
+  const cards = scheduleMonth(state);
+  for (const card of cards) {
+    const tag = (card.kind === "major") ? "大事件" : (card.kind === "minor" ? "小事件" : "随机");
+    state.logMsg(`[M${state.month}] 《${card.title}》（${tag}/${card.category}）`);
     await resolveCard(state, card, controller);
+    if (state.endedEarly) break;
   }
 }
 async function phaseNoon(state, controller) {
   if (!state.player().alive) return;
   const target = await controller.noonTalk(state);
   if (target !== null && target !== undefined && target >= 0 && target < state.actors.length && state.actors[target].alive) {
-    state.logMsg(`[D${state.day}] 你与 ${state.actors[target].name} 进行了午间密谈。`);
+    state.logMsg(`[M${state.month}] 你与 ${state.actors[target].name} 进行了午间密谈。`);
   }
 }
 async function phaseNight(state, controller) {
@@ -957,7 +1015,7 @@ async function phaseNight(state, controller) {
     if (act) {
       const [ability, target] = act;
       if (target >= 0 && target < state.actors.length && state.actors[target].alive) {
-        state.logMsg(`[D${state.day}] 你使用了「${ability}」于 ${state.actors[target].name}。`);
+        state.logMsg(`[M${state.month}] 你使用了「${ability}」于 ${state.actors[target].name}。`);
       }
     }
   }
@@ -982,7 +1040,7 @@ async function phaseSettle(state, controller) {
     a.stress = clamp(a.stress + TUNING.RESOURCE_NATURAL.stress_per_day, 0, 100);
     if (a.tier === "mid") a.stress = clamp(a.stress + TUNING.RESOURCE_NATURAL.mid_extra_stress, 0, 100);
     // 【Reigns §8.2 精力漂移】D7 起玩家每日 stress +1（精力缓慢下探），AI 不变
-    if (a.isPlayer && TUNING.ENERGY_DRIFT && state.day >= (TUNING.ENERGY_DRIFT.start_day || 7)) {
+    if (a.isPlayer && TUNING.ENERGY_DRIFT && state.month >= (TUNING.ENERGY_DRIFT.start_month || 7)) {
       a.stress = clamp(a.stress + (TUNING.ENERGY_DRIFT.stress_per_day || 1), 0, 100);
     }
     if (a.cash < 0) a.stress = clamp(a.stress + D.cash_negative_stress, 0, 100);
@@ -1002,7 +1060,7 @@ async function phaseSettle(state, controller) {
   for (const a of state.aliveActors()) {
     if (a.influenceZeroDays >= R.INFLUENCE_ZERO_GRACE) eliminate(state, a, "边缘化调岗（声望清零）");
   }
-  if (state.player().alive && state.player().cash <= R.CASH_FLOOR && TUNING.ASSEMBLY_DAYS.includes(state.day)) {
+  if (state.player().alive && state.player().cash <= R.CASH_FLOOR && TUNING.ASSEMBLY_DAYS.includes(state.month)) {
     if (state.rng.random() < 0.6) eliminate(state, state.player(), "审计约谈（资金穿底）");
   }
   // 【Reigns §5.1】日结后触边检查（捕捉由自然衰减导致的触边）
@@ -1012,7 +1070,7 @@ async function phaseSettle(state, controller) {
   }
   state.chaos = clamp(state.chaos - TUNING.CHAOS.daily_decay, 0, 100);
   await controller.showInfo(state, "settle",
-    `第 ${state.day} 天 · 日结：你的声望 ${state.player().influence.toFixed(0)} / ` +
+    `第 ${state.month} 月 · 日结：你的声望 ${state.player().influence.toFixed(0)} / ` +
     `压力 ${state.player().stress.toFixed(0)} / 预算 ${state.player().cash.toFixed(0)} 万。`);
 }
 async function phaseAssembly(state, controller) {
@@ -1024,13 +1082,13 @@ async function phaseAssembly(state, controller) {
     if (tmpl === "accuse" && tgt !== null && tgt !== undefined) {
       state.assembly.accused = tgt;
       for (const a of alive) a.trust[tgt] = clamp((a.trust[tgt] || 0) - TUNING.SPEECH_TEMPLATES.accuse.trust_target, -100, 100);
-      state.logMsg(`[D${state.day}] 你在联席会议上指认了 ${state.actors[tgt].name}。`);
+      state.logMsg(`[M${state.month}] 你在联席会议上指认了 ${state.actors[tgt].name}。`);
     } else if (tmpl === "defend") {
       state.assembly.defend = true;
-      state.logMsg(`[D${state.day}] 你在联席会议上自辩。`);
+      state.logMsg(`[M${state.month}] 你在联席会议上自辩。`);
     } else if (tmpl === "deflect") {
       state.assembly.deflect = true;
-      state.logMsg(`[D${state.day}] 你把议题引向别处，转移了话题。`);
+      state.logMsg(`[M${state.month}] 你把议题引向别处，转移了话题。`);
     }
     const nb = await controller.assemblyBribe(state);
     const cap = state._diff.bribe_cap;
@@ -1042,7 +1100,7 @@ async function phaseAssembly(state, controller) {
       const ais = alive.filter((a) => !a.isPlayer);
       state.rng.shuffle(ais);
       state.assembly.playerBribed = ais.slice(0, nbb).map((a) => a.idx);
-      state.logMsg(`[D${state.day}] 你花费 ${cost} 万可动用预算买下 ${nbb} 张票。`);
+      state.logMsg(`[M${state.month}] 你花费 ${cost} 万可动用预算买下 ${nbb} 张票。`);
     }
   }
   const votes = {};
@@ -1070,7 +1128,7 @@ async function phaseAssembly(state, controller) {
   }
   eliminate(state, best, "优化名单（联席会议投票出局）");
   state.chaos = clamp(state.chaos + TUNING.CHAOS.vote_out, 0, 100);
-  state.logMsg(`[D${state.day}] 联席会议：${best.name} 被投出局（${bestV.toFixed(1)} 票）。`);
+  state.logMsg(`[M${state.month}] 联席会议：${best.name} 被投出局（${bestV.toFixed(1)} 票）。`);
 
   // 【Reigns §6.1】联席会议与会者四表盘耦合（仅存活玩家）
   const p = state.player();
@@ -1103,9 +1161,9 @@ async function phaseAssembly(state, controller) {
 }
 function eliminate(state, actor, cause) {
   actor.alive = false;
-  actor.outDay = state.day;
+  actor.outMonth = state.month;
   actor.outCause = cause;
-  state.logMsg(`  ⚠ ${actor.name} 出局：${cause}（第 ${state.day} 天）`);
+  state.logMsg(`  ⚠ ${actor.name} 出局：${cause}（第 ${state.month} 月）`);
   if (actor.isPlayer) state.observer = true;
 }
 function evaluateGoal(state, fkey) {
@@ -1149,7 +1207,7 @@ function evaluateGoal(state, fkey) {
 }
 function evaluateSubGoal(state, fkey) {
   const p = state.player();
-  if (fkey === "FV_A") return state.actors.some((a) => !a.alive && a.outDay !== null && a.outDay < 12 && a.faction !== p.faction);
+  if (fkey === "FV_A") return state.actors.some((a) => !a.alive && a.outMonth !== null && a.outMonth < 12 && a.faction !== p.faction);
   if (fkey === "FV_B") return p.influence >= 55;
   if (fkey === "FV_C") return p.betrayals >= 3;
   if (fkey === "FV_D") return p.cash >= 60 && p.outCause !== "审计约谈（资金穿底）";
@@ -1158,7 +1216,7 @@ function evaluateSubGoal(state, fkey) {
 // 【展示层】按 outcome × 派系目标达成度挑一个终局长文案变体，再补一句死因/未达成尾巴。
 function buildEpilogue(result) {
   const pool = EPILOGUE[result.outcome] || EPILOGUE.lose;
-  const hsh = _bioHash(result.faction, result.rating, result.day, result.factionTier);
+  const hsh = _bioHash(result.faction, result.rating, result.month, result.factionTier);
   let text = pool[hsh % pool.length];
   if (result.end_meter) {
     const mName = ({ performance: "业绩", network: "人脉", influence: "声望", energy: "精力" })[result.end_meter] || result.end_meter;
@@ -1195,13 +1253,13 @@ function finalJudge(state) {
 
   const reveal = state.actors.map((a) => ({
     name: a.name, isPlayer: a.isPlayer, faction: a.faction, factionAlias: a.factionAlias,
-    tier: a.tier, alive: a.alive, outDay: a.outDay, outCause: a.outCause,
+    tier: a.tier, alive: a.alive, outMonth: a.outMonth, outCause: a.outCause,
     goal: factionGoal(a.faction), influence: Math.round(a.influence),
     stress: Math.round(a.stress), cash: Math.round(a.cash),
   }));
 
   const result = {
-    day: state.day, outcome, rating, title: _RATING_TITLES[rating] || "未知结局",
+    month: state.month, outcome, rating, title: _RATING_TITLES[rating] || "未知结局",
     epilogue: "",   // 【展示层】终局长文案，下面 buildEpilogue 填充
     playerAlive: alive, observer: state.observer, faction: fkey, factionAlias: factionAlias(fkey),
     factionTier, subOk, difficulty: state.difficulty, numActors: state.numActors,
@@ -1350,12 +1408,12 @@ class RandomController extends Controller {
 async function runGame(difficulty = "medium", numActors = 9, playerTier = null, controller = null, seed = null) {
   const state = setupWorld(difficulty, numActors, playerTier, seed);
   const ctrl = controller || new RandomController();
-  const dayMax = TUNING.DAY_MAX;
+  const monthMax = TUNING.DAY_MAX;
   const assemblyDays = new Set(TUNING.ASSEMBLY_DAYS);
 
-  for (let day = 1; day <= dayMax; day++) {
+  for (let month = 1; month <= monthMax; month++) {
     if (state.endedEarly) break;
-    state.day = day;
+    state.month = month;
     await phaseMorning(state, ctrl);
     if (state.endedEarly) break;
     await phaseDayCards(state, ctrl);
@@ -1366,7 +1424,7 @@ async function runGame(difficulty = "medium", numActors = 9, playerTier = null, 
     if (state.endedEarly) break;
     await phaseSettle(state, ctrl);
     if (state.endedEarly) break;
-    if (assemblyDays.has(day)) await phaseAssembly(state, ctrl);
+    if (assemblyDays.has(month)) await phaseAssembly(state, ctrl);
     if (state.endedEarly) break;
     const alive = state.aliveActors();
     if (alive.length <= 1) { state.endedEarly = true; break; }
@@ -1467,7 +1525,8 @@ function silhouetteSVG(tier, color) {
 function renderTop(state) {
   if (!DOM || !state) return;
   const p = state.player();
-  DOM.dayLabel.textContent = `第 ${state.day} 天 · ${PHASE_LABELS[state.phase] || ""}`;
+  const ml = monthLabel(state.month);
+  DOM.dayLabel.textContent = `第 ${state.month}/60 月 · ${ml.label} · ${PHASE_LABELS[state.phase] || ""}`;
   DOM.goalLabel.innerHTML = `你的派系：<b style="color:${factionColor(p.faction)}">${p.factionAlias}</b>（${factionGoal(p.faction)}） · 混沌 ${state.chaos.toFixed(0)}`;
   // 【Reigns】现金改为 pill
   if (DOM.cashPill) DOM.cashPill.textContent = `预算 ¥${p.cash.toFixed(0)} 万`;
@@ -1514,7 +1573,7 @@ function renderRoster(state) {
     else { facText = "？ ？ ？"; facColor = "#6E665A"; }
     const info = h("div", { class: "actor-info" }, [
       h("div", { class: "actor-name" }, a.name + (a.isPlayer ? "（你）" : "")),
-      h("div", { class: "actor-status" }, a.alive ? TIER_LABEL[a.tier] : `D${a.outDay}出局`),
+      h("div", { class: "actor-status" }, a.alive ? TIER_LABEL[a.tier] : `D${a.outMonth}出局`),
       h("div", { class: "actor-fac" + (a.isPlayer || a.revealed || (STATE && STATE.result) ? "" : " watermark"), style: `color:${facColor}` }, facText),
     ]);
     row.appendChild(info);
@@ -1712,7 +1771,7 @@ class GUIController extends Controller {
         .concat([{ label: "跳过密谈", value: null }]),
     });
     if (target === null || target === undefined) {
-      state.logMsg(`[D${state.day}] 你跳过了午间密谈。`); renderLog(state); return null;
+      state.logMsg(`[M${state.month}] 你跳过了午间密谈。`); renderLog(state); return null;
     }
     const t = state.actors[target];
     const stance = await pickFromPanel({
@@ -1727,16 +1786,16 @@ class GUIController extends Controller {
     if (stance === "warm") {
       state.player().trust[target] = clamp((state.player().trust[target] || 0) + 5, -100, 100);
       t.trust[0] = clamp((t.trust[0] || 0) + 3, -100, 100);
-      state.logMsg(`[D${state.day}] 你与 ${t.name} 推心置腹，关系近了些。`);
+      state.logMsg(`[M${state.month}] 你与 ${t.name} 推心置腹，关系近了些。`);
     } else if (stance === "probe") {
       nudgeBelief(state.player(), t, state._diff.intel_accuracy);
       t.trust[0] = clamp((t.trust[0] || 0) - 1, -100, 100);
-      state.logMsg(`[D${state.day}] 你试探了 ${t.name} 的底细，对方有所察觉。`);
+      state.logMsg(`[M${state.month}] 你试探了 ${t.name} 的底细，对方有所察觉。`);
     } else if (stance === "fake") {
       nudgeBelief(state.player(), t, state._diff.intel_accuracy);
       t.trust[0] = clamp((t.trust[0] || 0) - 3, -100, 100);
       state.chaos = clamp(state.chaos + 1, 0, 100);
-      state.logMsg(`[D${state.day}] 你给 ${t.name} 放了点烟雾弹。`);
+      state.logMsg(`[M${state.month}] 你给 ${t.name} 放了点烟雾弹。`);
     }
     renderLog(state); renderRoster(state);
     return target;
@@ -1871,17 +1930,17 @@ function applyNightAbility(player, ability, t, state) {
   if (ability === "施压") {
     t.stress = clamp(t.stress + 3, 0, 100);
     player.trust[t.idx] = clamp((player.trust[t.idx] || 0) - 2, -100, 100);
-    state.logMsg(`[D${state.day}] 你夜里给 ${t.name} 施了压。`);
+    state.logMsg(`[M${state.month}] 你夜里给 ${t.name} 施了压。`);
   } else if (ability === "调阅背景") {
     nudgeBelief(player, t, state._diff.intel_accuracy);
-    state.logMsg(`[D${state.day}] 你调阅了 ${t.name} 的背景资料。`);
+    state.logMsg(`[M${state.month}] 你调阅了 ${t.name} 的背景资料。`);
   } else if (ability === "挪预算") {
     player.cash = clamp(player.cash + 6, -30, 300);
     t.cash = clamp(t.cash - 6, -30, 300);
-    state.logMsg(`[D${state.day}] 你挪了点预算，${t.name} 那儿少了些。`);
+    state.logMsg(`[M${state.month}] 你挪了点预算，${t.name} 那儿少了些。`);
   } else if (ability === "打探消息") {
     nudgeBelief(player, t, state._diff.intel_accuracy * 0.6);
-    state.logMsg(`[D${state.day}] 你向 ${t.name} 打探到一些口风。`);
+    state.logMsg(`[M${state.month}] 你向 ${t.name} 打探到一些口风。`);
   }
 }
 function showEndScreen(result) {
@@ -1920,7 +1979,7 @@ function showEndScreen(result) {
     h("span", {}, "状态"), h("span", {}, "声望"), h("span", {}, "压力"), h("span", {}, "预算"),
   ]));
   for (const r of result.reveal) {
-    const status = r.alive ? "存活" : `D${r.outDay}出局`;
+    const status = r.alive ? "存活" : `D${r.outMonth}出局`;
     const col = r.isPlayer ? "#F0E6D2" : factionColor(r.faction);
     table.appendChild(h("div", { class: "reveal-row" + (r.isPlayer ? " me" : "") }, [
       h("span", { style: `color:${col}` }, r.name + (r.isPlayer ? "（你）" : "")),

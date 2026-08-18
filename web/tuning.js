@@ -2,19 +2,25 @@
 const TUNING = {
   "version": "1.0",
   "comment": "《职场营销博弈》全部平衡/数值外置于此。策划改数不改代码。所有键缺失时引擎有兜底默认值。",
-  "DAY_MAX": 12,
+  "DAY_MAX": 60,
   "CARDS_PER_DAY_BASE": 3,
   "CARDS_PER_DAY_RAMP": {
     "1": 2,
     "2": 2
   },
   "ASSEMBLY_DAYS": [
-    3,
     6,
-    9,
-    12
+    12,
+    18,
+    24,
+    30,
+    36,
+    42,
+    48,
+    54,
+    60
   ],
-  "NUM_ACTORS": 9,
+  "NUM_ACTORS": 12,
   "NUM_ACTORS_MIN": 7,
   "FACTIONS": {
     "FV_A": {
@@ -481,7 +487,7 @@ const TUNING = {
     "debuff_gain_mult": 0.7
   },
   "ENERGY_DRIFT": {
-    "start_day": 7,
+    "start_month": 7,
     "stress_per_day": 1,
     "player_only": true
   },
