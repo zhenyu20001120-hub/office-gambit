@@ -80,14 +80,14 @@ def setup_world(difficulty="medium", num_actors=9, player_tier=None, seed=None):
     player = Actor(idx=0, name=names[0], is_player=True, tier=ptier)
     player.personality = _make_personality(rng, fac_list[0])
     player.faction = fac_list[0]
-    _init_actor_resources(player, d, True)
+    _init_actor_resources(player, d, True, difficulty)
     state.actors.append(player)
 
     for i in range(1, num_actors):
         a = Actor(idx=i, name=names[i], tier=tier_list[i - 1])
         a.personality = _make_personality(rng, fac_list[i])
         a.faction = fac_list[i]
-        _init_actor_resources(a, d, False)
+        _init_actor_resources(a, d, False, difficulty)
         state.actors.append(a)
 
     for a in state.actors:
@@ -103,17 +103,25 @@ def setup_world(difficulty="medium", num_actors=9, player_tier=None, seed=None):
     return state
 
 
-def _init_actor_resources(a: Actor, d, is_player):
+def _init_actor_resources(a: Actor, d, is_player, difficulty="medium"):
     base = config.TUNING["INIT_RESOURCES"][a.tier]
+    rm = config.TUNING["REIGN_METERS"]
     if is_player:
         off = d["player_start_offset"]
         a.influence = clamp(base["influence"] + off.get("influence", 0), 0, 100)
         a.stress = clamp(base["stress"] + off.get("stress", 0), 0, 100)
         a.cash = clamp(base["cash"] + off.get("cash", 0), -30, 300)
+        # Reigns：业绩/人脉 50 基线 + 难度 offset（easy +3 / medium 0 / hard -3）
+        roff = config.TUNING.get("PLAYER_START_OFFSET_REIGN", {}).get(difficulty, 0)
+        a.performance = clamp(rm["performance"]["init"] + roff, rm["performance"]["min"], rm["performance"]["max"])
+        a.network = clamp(rm["network"]["init"] + roff, rm["network"]["min"], rm["network"]["max"])
     else:
         a.influence = clamp(round(base["influence"] * random.uniform(0.9, 1.1)), 0, 100)
         a.stress = clamp(round(base["stress"] * random.uniform(0.9, 1.1)), 0, 100)
         a.cash = clamp(round(base["cash"] * random.uniform(0.9, 1.1)), -30, 300)
+        # Reigns：AI 持数值仅用于投票威胁拟真（不触危机），50 ± 10 个体随机
+        a.performance = clamp(round(rm["performance"]["init"] + random.uniform(-10, 10)), rm["performance"]["min"], rm["performance"]["max"])
+        a.network = clamp(round(rm["network"]["init"] + random.uniform(-10, 10)), rm["network"]["min"], rm["network"]["max"])
 
 
 def apply_choice(state: GameState, actor: Actor, ch: dict, is_player: bool):
@@ -143,10 +151,107 @@ def apply_choice(state: GameState, actor: Actor, ch: dict, is_player: bool):
     dstr = clamp(dstr, -c12, c12)
     dcash = clamp(dcash, -c12, c12)
 
+    # Reigns：业绩 / 人脉 同样走 tier 缩放（接现有 tm 思路）
+    dperf = sgn(pl.get("performance", 0) * tm["influence_gain"])
+    dnet = sgn(pl.get("network", 0) * tm["influence_gain"])
+    if actor.influence >= D["influence_high"]:
+        dperf *= 0.7
+        dnet *= 0.7
+    if actor.stress >= D["stress_high"]:
+        dperf *= 0.8
+        dnet *= 0.8
+    # 软重置后「2 天增益衰减 ×0.7」防再触
+    rsm = config.TUNING["REIGN_SOFT_RESET"]
+    if actor.reign_debuff_days.get("performance", 0) > 0:
+        dperf *= rsm["debuff_gain_mult"]
+    if actor.reign_debuff_days.get("network", 0) > 0:
+        dnet *= rsm["debuff_gain_mult"]
+    dperf = clamp(dperf, -c12, c12)
+    dnet = clamp(dnet, -c12, c12)
+
     actor.influence += dinf
     actor.stress += dstr
     actor.cash += dcash
+    actor.performance += dperf
+    actor.network += dnet
     state.clamp_actor(actor)
+
+
+# ---- Reigns 触边危机（reigns_layer.md §5）----
+# 危机 id 与 GDD §5 一一对应：①业绩致命 ②业绩满 ③人脉空 ④人脉满
+# ⑤声望空(启动慢性) ⑥声望满 ⑦精力致命 ⑧精力满
+def _reign_fatal(state, actor, meter_name, cause, crisis_id):
+    actor.alive = False
+    actor.out_day = state.day
+    actor.out_cause = cause
+    state.observer = True
+    state.ended_early = True
+    state.end_meter = {
+        "type": "fatal", "meter": meter_name, "crisis": crisis_id,
+        "cause": cause, "day": state.day,
+    }
+
+
+def _reign_soft(state, actor, mkey, mname, crisis_id):
+    R = config.TUNING["RESOURCES"]
+    RS = config.TUNING["REIGN_SOFT_RESET"]
+    setattr(actor, mkey, 50)
+    actor.cash = clamp(actor.cash - RS["cash_penalty"], R["cash"]["min"], R["cash"]["max"])
+    actor.reign_debuff_days[mkey] = RS["debuff_days"]  # 2 天增益衰减 ×0.7
+    if mkey == "influence":
+        actor.chronic_influence = True  # 启动慢性边缘化追踪
+    if state.end_meter is None:
+        state.end_meter = {"type": "soft", "meters": [], "crises": [], "day": state.day}
+    state.end_meter["meters"].append(mname)
+    state.end_meter["crises"].append(crisis_id)
+
+
+def check_edges(state):
+    """Reigns 触边检查（§5.1）：每次选项后 / 日结后 / 联席会议后各跑一次。
+    致命（performance==0 或 stress==100）→ 终局并记 end_meter；
+    软重置（业绩/人脉/声望/精力 触 0 或 100）→ 该表盘回 50 + 预算扣罚 + 2 天增益衰减；
+    软重置后再查一次，最多迭代 3 次，仍命中按致命处理。
+    返回本回合触发的危机事件列表（供 UI 展示）。
+    """
+    p = state.player()
+    if not p.alive:
+        return []
+    RM = config.TUNING["REIGN_METERS"]
+    R = config.TUNING["RESOURCES"]
+    # 1) 致命优先
+    if p.performance <= RM["performance"]["min"]:
+        _reign_fatal(state, p, "业绩", "优化名单（业绩触底被辞退）", "①")
+        return [state.end_meter]
+    if p.stress >= R["STRESS_BREAK"]:  # energy == 0，复用 stress=100 崩溃
+        _reign_fatal(state, p, "精力", "长期病假（精力崩溃）", "⑦")
+        return [state.end_meter]
+    # 2) 软重置（按 业绩>人脉>声望>精力 顺序）
+    meters = [
+        ("performance", "业绩", "②"), ("network", "人脉", "③"),
+        ("influence", "声望", "⑤"), ("stress", "精力", "⑧"),
+    ]
+    triggered = []
+    for _ in range(3):
+        hit = False
+        for mkey, mname, cid in meters:
+            v = getattr(p, mkey)
+            if v <= 0 or v >= 100:
+                # 已在上文按致命处理的组合不再软重置（冗余保险）
+                if mkey == "performance" and v <= 0:
+                    continue
+                if mkey == "stress" and v >= 100:
+                    continue
+                _reign_soft(state, p, mkey, mname, cid)
+                hit = True
+                triggered.append({"meter": mname, "crisis": cid})
+        if not hit:
+            break
+    else:
+        # 三次迭代仍命中 → 系统性崩溃，按致命处理
+        _reign_fatal(state, p, "声望", "表盘系统性触边出局", "⚠")
+        return [state.end_meter]
+    state.clamp_actor(p)
+    return triggered
 
 
 def apply_client_effects(state: GameState, actor: Actor, ch: dict):
@@ -208,6 +313,14 @@ def resolve_card(state: GameState, card: dict, controller):
         a.motivation = hint
         apply_choice(state, a, ch, False)
         a.actions += 1
+
+    # 修复1：把本张牌上所有角色所选选项的派系信任增量，按全场均值累加到全局 faction_trust。
+    # 此前该增量从未写入，导致 faction_trust 恒为 0 —— rival_faction 僵死、派系动态失效。
+    ch_list = [ch for ch in choice_of.values() if ch]
+    if ch_list:
+        for f in config.FACTIONS:
+            mean = sum(ch["faction_trust"].get(f, 0) for ch in ch_list) / len(ch_list)
+            state.faction_trust[f] = clamp(state.faction_trust[f] + mean, -100, 100)
 
     for obs in state.alive_actors():
         for act in state.alive_actors():

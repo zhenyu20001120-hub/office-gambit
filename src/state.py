@@ -26,6 +26,17 @@ class Actor:
     influence: float = 25.0
     stress: float = 10.0
     cash: float = 20.0
+    # Reigns 四表盘层（reigns_layer.md）：业绩 / 人脉 为真实存储表盘；
+    # 声望=influence（复用）、精力=100-stress（派生，不存储）。
+    performance: float = 50.0
+    network: float = 50.0
+    # 联席会议「连续被指认」计数（触发 accused_streak 惩罚）
+    accused_streak: int = 0
+    # 声望慢性边缘化追踪（软重置后启动：influence<=15 连续 3 天 → 边缘化）
+    chronic_influence: bool = False
+    influence_low_days: int = 0
+    # 软重置后的「2 天增益衰减 ×0.7」倒计时（meter 名 -> 剩余天数）
+    reign_debuff_days: Dict[str, int] = field(default_factory=dict)
     alive: bool = True
     out_day: Optional[int] = None
     out_cause: Optional[str] = None
@@ -63,6 +74,8 @@ class GameState:
         self.result = None
         self.observer = False
         self.ended_early = False
+        # Reigns 触边记录：终局时记录死因/触发表盘（来自 check_edges）
+        self.end_meter = None
         self.clients_taken = {f: 0 for f in tuning_data.FACTIONS}
         self.clients_lost = {f: 0 for f in tuning_data.FACTIONS}
         self._diff = tuning_data.diff(difficulty)
@@ -72,6 +85,11 @@ class GameState:
         a.influence = clamp(a.influence, r["influence"]["min"], r["influence"]["max"])
         a.stress = clamp(a.stress, r["stress"]["min"], r["stress"]["max"])
         a.cash = clamp(a.cash, r["cash"]["min"], r["cash"]["max"])
+        rm = tuning_data.TUNING.get("REIGN_METERS", {})
+        if "performance" in rm:
+            a.performance = clamp(a.performance, rm["performance"]["min"], rm["performance"]["max"])
+        if "network" in rm:
+            a.network = clamp(a.network, rm["network"]["min"], rm["network"]["max"])
 
     def alive_actors(self):
         return [a for a in self.actors if a.alive]

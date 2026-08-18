@@ -33,6 +33,22 @@ _DEFAULTS = {
         "FV_C": {"ambition": 0.90, "loyalty": 0.40, "risk_appetite": 0.65, "empathy": 0.35, "guile": 0.85},
         "FV_D": {"ambition": 0.25, "loyalty": 0.60, "risk_appetite": 0.15, "empathy": 0.75, "guile": 0.40},
     },
+    # ---- Reigns 四表盘层（reigns_layer.md §8.5）----
+    "REIGN_METERS": {
+        "performance": {"min": 0, "max": 100, "init": 50},
+        "network": {"min": 0, "max": 100, "init": 50},
+    },
+    "REIGN_SOFT_RESET": {"cash_penalty": 15, "debuff_days": 2, "debuff_gain_mult": 0.7},
+    "ENERGY_DRIFT": {"start_day": 7, "stress_per_day": 1, "player_only": True},
+    "REIGN_VOTE": {
+        "threat_perf_w": 0.4, "threat_net_w": -0.3,
+        "low_net_threshold": 20, "low_net_vote_bonus": 0.5,
+        "low_net_trust_decay": 2, "low_net_belief_penalty": 0.1,
+    },
+    "ASSEMBLY_REWARD": {"survive_perf": 5, "survive_influence": 5,
+        "accused_net": -3, "accused_influence": -3,
+        "defend_net": 2, "accused_streak_influence": -5, "accused_streak_net": -3},
+    "PLAYER_START_OFFSET_REIGN": {"easy": 3, "medium": 0, "hard": -3},
 }
 
 try:

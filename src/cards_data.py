@@ -50,9 +50,18 @@ def load_cards():
                     "influence": int(pl.get("influence", 0)),
                     "stress": int(pl.get("stress", 0)),
                     "cash": int(pl.get("cash", 0)),
+                    # Reigns 四表盘层：业绩 / 人脉（与 GDD §3.3 批量增补一致）
+                    "performance": int(pl.get("performance", 0)),
+                    "network": int(pl.get("network", 0)),
                 },
                 "faction_trust": {f: int(eff.get("faction_trust", {}).get(f, 0)) for f in tuning_data.FACTIONS},
             })
+        # Reigns 左右二选一预计算（design/cards/cards.json 透传，杜绝双端分歧）
+        rg = c.get("reigns")
+        norm["reigns"] = (
+            {"left": rg.get("left"), "right": rg.get("right")}
+            if rg and rg.get("left") and rg.get("right") else None
+        )
         cards.append(norm)
     _CARDS_CACHE = cards
     _CARDS_META = meta

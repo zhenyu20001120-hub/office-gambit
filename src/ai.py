@@ -182,9 +182,11 @@ def ai_vote_score(a: Actor, target: Actor, state: GameState) -> float:
     rival_i = FIDX[rival]
     score = 2.2 * b[rival_i]
     score -= 1.8 * (a.trust.get(target.idx, 0.0) / 100.0)
-    tw = config.TUNING["TIER_MODS"][target.tier]["vote_weight"]
+    tm_t = config.TUNING["TIER_MODS"][target.tier]
+    tw = tm_t.get("vote_threat_weight", 1.0)
     threat = (target.influence / 100.0) * tw * (1 + state._diff["ai_aggressiveness"])
     score += 1.2 * threat
+    score += tm_t.get("vote_target_bonus", 0) or 0
     if b[fi] == max(b) and b[fi] > 0.4:
         score -= 2.5
     if target.is_player and a.idx in state.assembly["player_bribed"]:

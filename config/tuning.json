@@ -31,9 +31,9 @@
     "mid_extra_stress": 1
   },
   "TIER_MODS": {
-    "employee": { "influence_gain": 0.8, "stress_gain": 1.2, "vote_weight": 1.0, "passive_stress": 0 },
-    "mid": { "influence_gain": 1.0, "stress_gain": 1.0, "vote_weight": 1.5, "passive_stress": 1 },
-    "senior": { "influence_gain": 1.2, "stress_gain": 0.9, "vote_weight": 2.0, "passive_stress": 0, "vote_target_bonus": 0.1 }
+    "employee": { "influence_gain": 0.8, "stress_gain": 1.2, "vote_weight": 1.0, "passive_stress": 0, "vote_threat_weight": 1.0 },
+    "mid": { "influence_gain": 1.0, "stress_gain": 1.0, "vote_weight": 1.5, "passive_stress": 1, "vote_threat_weight": 0.7 },
+    "senior": { "influence_gain": 1.2, "stress_gain": 0.9, "vote_weight": 2.0, "passive_stress": 0, "vote_target_bonus": 0.1, "vote_threat_weight": 0.74 }
   },
   "TIER_WEIGHT_FOR_POWER": { "employee": 1.0, "mid": 1.3, "senior": 1.6 },
   "PRICES": {
@@ -134,5 +134,21 @@
     "accuse": { "label": "指认", "trust_target": -8, "belief_offset": 0.08 },
     "defend": { "label": "自辩", "self_vote_mult": 0.85 },
     "deflect": { "label": "转移话题", "vote_randomness": 0.20 }
-  }
+  },
+
+  "REIGN_METERS": {
+    "performance": { "min": 0, "max": 100, "init": 50 },
+    "network":     { "min": 0, "max": 100, "init": 50 }
+  },
+  "REIGN_SOFT_RESET": { "cash_penalty": 15, "debuff_days": 2, "debuff_gain_mult": 0.7 },
+  "ENERGY_DRIFT": { "start_day": 7, "stress_per_day": 1, "player_only": true },
+  "REIGN_VOTE": {
+    "threat_perf_w": 0.4, "threat_net_w": -0.3,
+    "low_net_threshold": 20, "low_net_vote_bonus": 0.5,
+    "low_net_trust_decay": 2, "low_net_belief_penalty": 0.1
+  },
+  "ASSEMBLY_REWARD": { "survive_perf": 5, "survive_influence": 5,
+    "accused_net": -3, "accused_influence": -3,
+    "defend_net": 2, "accused_streak_influence": -5, "accused_streak_net": -3 },
+  "PLAYER_START_OFFSET_REIGN": { "easy": 3, "medium": 0, "hard": -3 }
 }
