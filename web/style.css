@@ -60,10 +60,45 @@ body {
   text-shadow: 0 0 18px rgba(232,192,112,.35);
 }
 .game-subtitle { color: var(--text-2); font-size: 13px; margin-bottom: 14px; }
-.start-intro { color: var(--text-1); font-size: 14px; margin: 0 0 16px; }
-.legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 0 0 18px; }
+.start-intro { color: var(--text-1); font-size: 14px; margin: 0 0 10px; }
+.start-story { color: var(--text-2); font-size: 13px; margin: 0 0 16px; line-height: 1.7; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 0 0 10px; }
 .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
 .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px currentColor; }
+.faction-intro { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; margin: 0 0 18px; padding: 10px 12px; border: 1px solid rgba(200,146,58,.18); border-radius: 10px; background: rgba(200,146,58,.05); }
+.faction-bio { font-size: 12px; color: var(--text-2); line-height: 1.55; }
+.faction-bio b { color: var(--glow); font-weight: 700; }
+
+/* 卡片潜台词（flavor） */
+.card-flavor { font-size: 13px; color: #8C8475; font-style: italic; line-height: 1.65; margin: 0 0 12px; border-left: 2px solid rgba(200,146,58,.35); padding-left: 10px; }
+
+/* 选项语气提示 */
+.opt-tone { font-size: 12px; color: #C9A24A; margin-top: 6px; font-weight: 600; }
+
+/* 选择后动态旁白 */
+.narration { border: 1px solid rgba(200,146,58,.3); background: linear-gradient(180deg, rgba(40,32,24,.6), rgba(20,17,15,.6)); }
+.narration-tag { color: #C9A24A; font-size: 13px; letter-spacing: 2px; margin-bottom: 8px; }
+.narration-text { font-size: 16px; color: var(--text-1); line-height: 1.8; margin: 0 0 14px; }
+
+/* 人物小传弹层 */
+.bio-overlay { position: fixed; inset: 0; background: rgba(8,6,5,.72); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+.bio-card { width: 100%; max-width: 460px; background: #1C1813; border: 1px solid rgba(200,146,58,.35); border-radius: 14px; padding: 20px 22px; box-shadow: 0 16px 50px rgba(0,0,0,.5); }
+.bio-name { font-family: var(--font-serif); font-size: 22px; font-weight: 700; color: var(--text-1); margin-bottom: 4px; }
+.bio-pos { font-size: 13px; color: var(--text-2); margin-bottom: 10px; }
+.bio-fac { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+.bio-tag { font-size: 14px; color: #C9A24A; font-style: italic; margin-bottom: 10px; line-height: 1.6; }
+.bio-line { font-size: 13px; color: var(--text-2); line-height: 1.75; margin-bottom: 12px; }
+.bio-attitude { font-size: 13px; color: var(--text-1); padding: 8px 10px; background: rgba(200,146,58,.08); border-radius: 8px; margin-bottom: 16px; }
+.bio-card .continue-btn { width: 100%; }
+
+/* 终局长文案 */
+.end-epilogue { margin: 6px 0 16px; padding: 14px 16px; border-left: 3px solid var(--glow); background: rgba(200,146,58,.07); border-radius: 0 10px 10px 0; }
+.end-epilogue-h { font-size: 13px; color: var(--glow); letter-spacing: 3px; margin-bottom: 8px; }
+.end-epilogue-text { font-size: 15px; color: var(--text-1); line-height: 1.9; margin: 0; }
+
+/* 名册行可点击（看小传） */
+.actor-row.clickable { cursor: pointer; }
+.actor-row.clickable:hover { background: rgba(200,146,58,.1); }
 
 .pick-group { margin: 14px 0; }
 .pick-label { font-size: 14px; color: var(--glow); margin-bottom: 6px; font-weight: 600; }

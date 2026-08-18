@@ -48,7 +48,56 @@ const _RATING_TITLES = {
   D: "《优化名单第一行》",
 };
 
+// 【展示层】终局长文案：按 outcome × 派系目标达成度生成差异化文案，每类 2~3 变体。
+const EPILOGUE = {
+  win: [
+    "十二天落幕，你把自己那摊事办成了。灯一关，你靠在椅背上，第一次觉得这家公司里也有你的一小块地盘。明天还要来，但至少今晚，你睡得着。",
+    "散会时没人鼓掌，可你清楚，关键那几票是冲你来的。你没声张，把功劳簿上自己的名字又描深了一笔。",
+    "本派系的目标在你手里落地了。你没赢下整座城，但赢下了你该守的那扇门——这就够了。",
+  ],
+  lose: [
+    "结局不算难看，可你心里清楚，真正想办的事黄了。你收拾工位时把那张合影翻了过去，不是遗憾，是提醒自己下回别这么天真。",
+    "你撑到了最后一天，却没撑到想要的结果。电梯下行的时候你忽然明白，有些局从开局就注定你只是颗棋子。",
+    "派系的目标没达成，你却学会了比输赢更值钱的东西：知道谁不能信。这课不便宜，但管用。",
+  ],
+  observer: [
+    "你没能撑到十二天结束。后来听人说，那场你缺席的会，照样开了，照样有人上位，照样有人背锅。职场从不因谁离场而暂停。",
+    "你出局得太早，连自己的葬礼都没赶上。但你在旁观席上看清了全场——有些真相，只有局外人才看得真切。",
+    "故事没有以你为主角收尾。可你留下的那几手，后来被人反复提起。名字不在功劳簿，却在闲话里活了下来。",
+  ],
+};
+
 const CIRCLED = ["①", "②", "③", "④", "⑤", "⑥"];
+
+// 【展示层】人物小传词池（确定性分配，不抽取共享 rng，保证可复现且不扰动引擎随机流）
+const BIO_POSITIONS = {
+  employee: ["基层执行", "一线销售", "项目组干事", "数据录入", "渠道跟单", "客服接口"],
+  mid: ["部门主管", "区域经理", "项目 PM", "品牌经理", "运营负责人", "客户经理"],
+  senior: ["事业部副总", "大区总", "战略总监", "营销 VP", "特派顾问", "集团代表"],
+};
+const BIO_TAGLINES = {
+  FV_A: ["「先把盘子做大，谁的脸面不重要。」", "「吞下对手，才算站稳。」", "「增长是第一位的，别的都好说。」", "「会上不抢话，签单时一定要署名。」"],
+  FV_B: ["「客户是底气，守住了就赢了一半。」", "「慢就是快，别把老关系作没了。」", "「稳妥比惊艳值钱。」", "「客户的电话，比老板的邮件先回。」"],
+  FV_C: ["「位置就那么多，不争就等着被挪走。」", "「上位靠的不是熬，是站准队。」", "「明面上和气，暗地里记着账。」", "「谁握着资源，我就靠近谁。」"],
+  FV_D: ["「别出事，比出彩重要。」", "「平稳落地，就是最大的本事。」", "「风浪越大，越要把自己藏好。」", "「能今天结束的，绝不拖到明天。」"],
+};
+function _bioHash(...strs) {
+  let h = 2166136261 >>> 0;
+  const s = strs.join("|");
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return h >>> 0;
+}
+function makeActorBio(a) {
+  const hp = _bioHash(a.idx, a.tier, a.faction);
+  const ht = _bioHash(a.faction, a.tier, a.name, a.idx);
+  const pos = BIO_POSITIONS[a.tier] || BIO_POSITIONS.employee;
+  a.position = pos[hp % pos.length];
+  const tl = BIO_TAGLINES[a.faction] || [];
+  a.tagline = tl.length ? tl[ht % tl.length] : "";
+  a.bio = a.isPlayer
+    ? `你，被集团安插进这家合资公司的暗线。${a.tagline}`
+    : `${a.name}，${TIER_LABEL[a.tier]}·${a.position}，隶属${a.factionAlias}（${factionGoal(a.faction)}）。${a.tagline}`;
+}
 
 // 派生常量（与 engine.py 中 D = TUNING["DERIVED"] 等价）
 const DERIVED = TUNING.DERIVED;
@@ -78,6 +127,75 @@ function choiceSummary(ch) {
   if (pl.performance) parts.push(`业绩${pl.performance >= 0 ? "+" : ""}${pl.performance}`);
   if (pl.network) parts.push(`人脉${pl.network >= 0 ? "+" : ""}${pl.network}`);
   return parts.length ? parts.join(" ") : "无变化";
+}
+// 【展示层】选项语气提示：由 choice.player 增量符号 + 幅度确定性推导，不依赖随机。
+function choiceTone(ch) {
+  const p = ch.player;
+  const tags = [];
+  if (p.stress >= 5) tags.push("压力陡增");
+  if (p.stress < 0) tags.push("松一口气");
+  if (p.cash < 0 && Math.abs(p.cash) >= 5) tags.push("要花本钱");
+  if (p.network <= -4) tags.push("得罪人");
+  if (p.influence >= 4) tags.push("露脸");
+  if (p.performance >= 4) tags.push("出业绩");
+  if (p.network >= 4) tags.push("攒人脉");
+  if (Math.abs(p.influence) + Math.abs(p.stress) + Math.abs(p.cash) + Math.abs(p.performance) + Math.abs(p.network) <= 3) tags.push("稳妥但平淡");
+  if (!tags.length) {
+    const byArch = {
+      grind: "踏实但累", obey: "听话省心", betray: "狠但冒险", ally: "人情往来",
+      expose: "翻脸摊牌", self: "自保", hedge: "含糊其辞", dodge: "走流程",
+      invest: "砸钱办事", risk: "赌一把", shield: "护人担责", leak: "泄密风险",
+      bow: "服软", cashin: "落袋为安",
+    };
+    tags.push(byArch[ch.arch] || "各有利弊");
+  }
+  return tags.join(" · ");
+}
+
+// 【展示层】选择后动态旁白：根据本次表盘升降 + 派系信任变化组合确定性模板生成。
+// prevState：应用本次选项前的玩家快照 {performance,network,influence,stress}；state：应用后。
+// 派系信任以该选项自身的 faction_trust 增量表述（全局信任矩阵在 AI 结算后才累加）。
+function narrationFor(choice, prev, state) {
+  const p = state.player();
+  const dPerf = p.performance - prev.performance;
+  const dNet = p.network - prev.network;
+  const dInf = p.influence - prev.influence;
+  const dEnergy = (100 - p.stress) - (100 - prev.stress);   // 精力增量
+  const ft = choice.faction_trust || {};
+  const lines = [];
+  if (dPerf <= -8) lines.push("这一下，你手里的数字又难看了几分。");
+  else if (dPerf >= 8) lines.push("业绩的红线上，你又往前拱了一寸。");
+  if (dEnergy <= -8) lines.push("你揉了揉太阳穴，今天注定是个不眠夜。");
+  else if (dEnergy >= 8) lines.push("一口气松下来，肩膀终于不僵了。");
+  if (dInf >= 8) lines.push("这回你露了脸，有人开始拿你当对手。");
+  let topF = null, topV = -1e9, botF = null, botV = 1e9;
+  for (const f of FACTIONS) {
+    const v = Number(ft[f] || 0);
+    if (v > topV) { topV = v; topF = f; }
+    if (v < botV) { botV = v; botF = f; }
+  }
+  if (topF && topV >= 5) lines.push(`${factionAlias(topF)}今天站你这边。`);
+  if (botF && botV <= -5) lines.push(`${factionAlias(botF)}把你划进了名单。`);
+  if (!lines.length) {
+    const byArch = {
+      grind: "埋头做事的人，最容易被当作理所当然。",
+      obey: "你点了头，难的事留给了别人。",
+      betray: "有人记住了你这一手。",
+      ally: "人情这种东西，记在心里也记在账上。",
+      expose: "台面下的事，被你翻到了台面上。",
+      self: "先保住自己，别的以后再说。",
+      hedge: "模糊一点，今天就能平安过去。",
+      dodge: "流程走完，谁也挑不出错。",
+      invest: "钱花出去了，效果还没看见。",
+      risk: "你赌了一把，结果要过阵子才知道。",
+      shield: "替人扛了雷，自己身上也沾了灰。",
+      leak: "话传出去了，收不回来。",
+      bow: "你低了头，对方却不一定领情。",
+      cashin: "落袋为安，今天先顾好自己。",
+    };
+    lines.push(byArch[choice.arch] || "局面静悄悄，但没人真的松手。");
+  }
+  return lines.join("");
 }
 
 /* ============================ 3. 随机数（MT19937，对齐 CPython random） ============================ */
@@ -309,6 +427,7 @@ function setupWorld(difficulty = "medium", numActors = 9, playerTier = null, see
     ? TUNING.PLAYER_START_OFFSET_REIGN[difficulty] : 0;
   player.performance = clamp(player.performance + reignOff, 0, 100);
   player.network = clamp(player.network + reignOff, 0, 100);
+  makeActorBio(player);   // 【展示层】生成玩家小传（派系对玩家仍隐藏）
   state.actors.push(player);
 
   for (let i = 1; i < numActors; i++) {
@@ -319,6 +438,7 @@ function setupWorld(difficulty = "medium", numActors = 9, playerTier = null, see
     // 【Reigns §8.1】AI 也持 performance/network（仅用于投票威胁拟真，不触发触边危机），50 ± 10
     a.performance = clamp(Math.round(50 + rng.uniform(-10, 10)), 0, 100);
     a.network = clamp(Math.round(50 + rng.uniform(-10, 10)), 0, 100);
+    makeActorBio(a);      // 【展示层】生成 NPC 小传
     state.actors.push(a);
   }
 
@@ -748,6 +868,10 @@ async function resolveCard(state, card, controller) {
       state.logMsg(`【失态】你压力过载，选择失控为「${card.choices[idx].label}」。`);
     }
     choiceOf[player.idx] = card.choices[idx];
+    const beforeNarr = {
+      performance: player.performance, network: player.network,
+      influence: player.influence, stress: player.stress,
+    };
     applyChoice(state, player, choiceOf[player.idx], true);
     player.actions += 1;
     if (["betray", "expose"].includes(card.choices[idx].arch)) player.betrayals += 1;
@@ -755,6 +879,11 @@ async function resolveCard(state, card, controller) {
     const report = check_edges(state);
     if ((report.fatal || report.soft_resets.length) && controller.onReignsCrisis) {
       await controller.onReignsCrisis(state, report);
+    }
+    // 【展示层】选择结算后、下一张卡出现前，给一句动态旁白（仅 GUI 控制器，不扰动无头跑测）
+    if (controller.showNarration && !report.fatal) {
+      const narr = narrationFor(choiceOf[player.idx], beforeNarr, state);
+      await controller.showNarration(state, narr);
     }
   } else {
     state.logMsg(`（你已出局，旁观）${card.title} 在场上继续发酵。`);
@@ -1026,6 +1155,19 @@ function evaluateSubGoal(state, fkey) {
   if (fkey === "FV_D") return p.cash >= 60 && p.outCause !== "审计约谈（资金穿底）";
   return false;
 }
+// 【展示层】按 outcome × 派系目标达成度挑一个终局长文案变体，再补一句死因/未达成尾巴。
+function buildEpilogue(result) {
+  const pool = EPILOGUE[result.outcome] || EPILOGUE.lose;
+  const hsh = _bioHash(result.faction, result.rating, result.day, result.factionTier);
+  let text = pool[hsh % pool.length];
+  if (result.end_meter) {
+    const mName = ({ performance: "业绩", network: "人脉", influence: "声望", energy: "精力" })[result.end_meter] || result.end_meter;
+    text += `　终局那一下，钉死你的是「${mName}」。`;
+  } else if (result.factionTier === "fail") {
+    text += "　你差的那口气，恰恰是本派系最看重的那条线。";
+  }
+  return text;
+}
 function finalJudge(state) {
   const p = state.player();
   const fkey = p.faction;
@@ -1060,6 +1202,7 @@ function finalJudge(state) {
 
   const result = {
     day: state.day, outcome, rating, title: _RATING_TITLES[rating] || "未知结局",
+    epilogue: "",   // 【展示层】终局长文案，下面 buildEpilogue 填充
     playerAlive: alive, observer: state.observer, faction: fkey, factionAlias: factionAlias(fkey),
     factionTier, subOk, difficulty: state.difficulty, numActors: state.numActors,
     playerTier: p.tier, chaos: Math.round(state.chaos), powerScore: Math.round(state.powerScore(fkey)),
@@ -1067,6 +1210,7 @@ function finalJudge(state) {
     end_meter: state.end_meter, end_cause: state.end_cause,
     reveal, log: state.log.slice(-60),
   };
+  result.epilogue = buildEpilogue(result);
   state.result = result;
   return result;
 }
@@ -1359,9 +1503,9 @@ function renderRoster(state) {
   if (!DOM || !DOM.roster || !state) return;
   const p = state.player();
   DOM.roster.innerHTML = "";
-  DOM.roster.appendChild(h("div", { class: "roster-head" }, "在场人物"));
+  DOM.roster.appendChild(h("div", { class: "roster-head" }, "在场人物（点开看小传）"));
   for (const a of state.actors) {
-    const row = h("div", { class: "actor-row" + (a.alive ? "" : " dead") });
+    const row = h("div", { class: "actor-row clickable" + (a.alive ? "" : " dead") });
     const silColor = a.isPlayer ? factionColor(a.faction) : "#8A8478";
     row.appendChild(h("div", { class: "sil sil-" + a.tier, html: silhouetteSVG(a.tier, silColor) }));
     let facText, facColor;
@@ -1378,8 +1522,39 @@ function renderRoster(state) {
     const pct = clamp((tval + 100) / 200, 0, 1) * 100;
     const bar = h("div", { class: "mini-bar" }, h("div", { class: "mini-fill", style: `width:${pct.toFixed(0)}%` }));
     row.appendChild(bar);
+    row.addEventListener("click", () => openActorBio(state, a));
     DOM.roster.appendChild(row);
   }
+}
+// 【展示层】人物小传弹层 + 当前态度分档（按 player.trust[idx]）
+function attitudeOf(state, a) {
+  if (a.isPlayer) return "——";
+  const t = state.player().trust[a.idx] || 0;
+  if (t >= 40) return "信任";
+  if (t >= 5) return "中立";
+  if (t >= -25) return "戒备";
+  return "敌视";
+}
+function openActorBio(state, a) {
+  if (!DOM || !DOM.game) return;
+  const overlay = h("div", { class: "bio-overlay" }, [
+    h("div", { class: "bio-card" }, [
+      h("div", { class: "bio-name" }, a.isPlayer ? a.name + "（你）" : a.name),
+      h("div", { class: "bio-pos" }, `${TIER_LABEL[a.tier]} · ${a.position || ""}`),
+      h("div", { class: "bio-fac", style: `color:${a.isPlayer ? "#F0E6D2" : factionColor(a.faction)}` },
+        a.isPlayer ? "你（派系隐藏）" : `${a.factionAlias} · ${factionGoal(a.faction)}`),
+      h("div", { class: "bio-tag" }, a.tagline || ""),
+      h("div", { class: "bio-line" }, a.bio || ""),
+      h("div", { class: "bio-attitude" }, `当前对你的态度：${attitudeOf(state, a)}`),
+      (() => {
+        const b = h("button", { class: "continue-btn" }, "关闭");
+        b.addEventListener("click", () => overlay.remove());
+        return b;
+      })(),
+    ]),
+  ]);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  DOM.game.appendChild(overlay);
 }
 function renderLog(state) {
   if (!DOM || !DOM.log) return;
@@ -1419,6 +1594,7 @@ class GUIController extends Controller {
       ]),
       h("h2", { class: "card-title" }, card.title),
       h("p", { class: "card-text" }, card.text),
+      card.flavor ? h("p", { class: "card-flavor" }, card.flavor) : null,
     ]);
     const leftPanel = h("div", {
       class: "reign-left", role: "button", tabindex: "0",
@@ -1427,6 +1603,7 @@ class GUIController extends Controller {
       h("div", { class: "reign-side-label" }, "◀ 稳妥"),
       h("div", { class: "reign-choice-label" }, leftCh.label),
       h("div", { class: "reign-eff" }, choiceSummary(leftCh)),
+      h("div", { class: "opt-tone" }, choiceTone(leftCh)),
     ]);
     const rightPanel = h("div", {
       class: "reign-right", role: "button", tabindex: "0",
@@ -1435,6 +1612,7 @@ class GUIController extends Controller {
       h("div", { class: "reign-side-label" }, "▶ 进取"),
       h("div", { class: "reign-choice-label" }, rightCh.label),
       h("div", { class: "reign-eff" }, choiceSummary(rightCh)),
+      h("div", { class: "opt-tone" }, choiceTone(rightCh)),
     ]);
     node.appendChild(leftPanel);
     node.appendChild(rightPanel);
@@ -1488,7 +1666,7 @@ class GUIController extends Controller {
       pickFromPanel({
         title: "全部选项",
         desc: `《${card.title}》的原始选项（点击或按数字选择）：`,
-        options: card.choices.map((ch, i) => ({ label: `${CIRCLED[i] || (i + 1)} ${ch.label}`, value: i, sub: choiceSummary(ch) })),
+        options: card.choices.map((ch, i) => ({ label: `${CIRCLED[i] || (i + 1)} ${ch.label}`, value: i, sub: choiceSummary(ch) + "　" + choiceTone(ch) })),
       }).then((v) => {
         if (v !== null && v !== undefined && !node._done) { node._done = true; CURRENT_REIGN_NODE = null; if (node._finish) node._finish(v); }
       });
@@ -1645,6 +1823,22 @@ class GUIController extends Controller {
     STATE = state;
     return new Promise((resolve) => { showCrisisModal(state, report, resolve); });
   }
+  showNarration(state, text) {
+    STATE = state;
+    const node = h("div", { class: "panel narration" }, [
+      h("div", { class: "narration-tag" }, "▌ 局势旁白"),
+      h("p", { class: "narration-text" }, text),
+    ]);
+    const btn = h("button", { class: "continue-btn" }, "继续 ▶");
+    node.appendChild(btn);
+    state.logMsg("📜 " + text);
+    renderLog(state);
+    return new Promise((resolve) => {
+      node._finish = () => resolve(null);
+      btn.addEventListener("click", () => { if (node._finish) node._finish(); });
+      present(node, state.observer ? 900 : 2600);
+    });
+  }
 }
 function nudgeBelief(obs, tgt, accuracy) {
   const b = obs.belief[tgt.idx] || [0.25, 0.25, 0.25, 0.25];
@@ -1709,6 +1903,9 @@ function showEndScreen(result) {
   const causeLine = meterName
     ? h("div", { class: "end-cause" }, `死因 / 终局触发表盘：${meterName}${result.end_cause ? "（" + result.end_cause + "）" : ""}`)
     : h("div", { class: "end-cause dim" }, "死因 / 终局触发表盘：自然终局（撑到了最后）");
+  const epilogueEl = result.epilogue
+    ? h("div", { class: "end-epilogue" }, [h("div", { class: "end-epilogue-h" }, "尾声"), h("p", { class: "end-epilogue-text" }, result.epilogue)])
+    : null;
   const stats = h("div", { class: "end-stats" }, [
     statLine("难度", result.difficulty),
     statLine("你的档位", TIER_LABEL[result.playerTier] || result.playerTier),
@@ -1741,6 +1938,7 @@ function showEndScreen(result) {
   DOM.end.appendChild(titleEl);
   DOM.end.appendChild(sub);
   DOM.end.appendChild(causeLine);
+  if (epilogueEl) DOM.end.appendChild(epilogueEl);
   DOM.end.appendChild(stats);
   DOM.end.appendChild(h("h3", { class: "reveal-h" }, "终局揭示"));
   DOM.end.appendChild(table);

@@ -29,6 +29,7 @@ function main() {
       tier: c.tier || "any",
       category: c.category || "",
       text: c.text || "",
+      flavor: c.flavor || "",   // 潜台词 / 内心独白（由 tools/gen_flavor.js 写入 cards.json）
       tags: c.tags || [],
       choices: [],
     };
