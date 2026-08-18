@@ -560,9 +560,18 @@ function aiVoteScore(a, target, state) {
   const rivalI = FIDX[rival];
   let score = 2.2 * (b[rivalI] || 0);
   score -= 1.8 * ((a.trust[target.idx] || 0) / 100.0);
-  const tw = TUNING.TIER_MODS[target.tier].vote_weight;
+  // 【修复2】威胁项此前直接复用 vote_weight（1 / 1.5 / 2，那本是「计票权重」）当层级系数，而
+  // target.influence 已经隐含层级差（初始声望 25 / 45 / 65），等于把层级算了两遍，
+  // 使高层被投出率高达 ~85%。改用独立的 vote_threat_weight（tuning 新键）做层级归一化，
+  // 抵掉这部分重复计权；层级差异仍由 target.influence 自然体现，vote_weight 只负责计票。
+  // 缺键时兜底 1.0（等价于只按声望算威胁）。
+  const tmT = TUNING.TIER_MODS[target.tier] || {};
+  const tw = tmT.vote_threat_weight !== undefined ? tmT.vote_threat_weight : 1.0;
   const threat = (target.influence / 100.0) * tw * (1 + state._diff.ai_aggressiveness);
   score += 1.2 * threat;
+  // 【修复3】启用 tuning 里早已存在却从未被读取的 vote_target_bonus（仅 senior: 0.1）：
+  // 该层级作为投票目标时的小幅固定加成。缺键默认 0，量级远小于 ±0.6 随机扰动，不引入不稳定。
+  score += Number(tmT.vote_target_bonus) || 0;
   if (b[fi] === Math.max(...b) && b[fi] > 0.4) score -= 2.5;
   // playerBribed 是被买票者的 idx 数组，必须用 includes 判成员（`in` 只查数组下标，会让买票完全失效）
   if (target.isPlayer && (state.assembly.playerBribed || []).includes(a.idx)) score -= 1.0 * Math.max(1, state.assembly.bribes);
@@ -688,6 +697,19 @@ async function resolveCard(state, card, controller) {
     a.motivation = hint;
     applyChoice(state, a, ch, false);
     a.actions += 1;
+  }
+
+  // 【修复1】把本张牌上所有角色所选选项的派系信任增量累加进全局信任矩阵。
+  // 此前该增量从未写入，导致 factionTrust 恒为 0 —— rivalFaction 固定、situationMatch 派系动态失效。
+  // factionTrust 是「牌桌层面各派系议程强弱」的公共信号（rivalFaction/situationMatch 只取 argmax），
+  // 故须由全体角色的选择共同推动，而非仅玩家单方决定；夹紧到 [-100,100]。
+  // 取全场均值（而非总和）累加：方向仍由集体选择决定，但量级不会几张牌就顶到 ±100 而使 argmax 僵死。
+  const chList = Object.values(choiceOf);
+  if (chList.length) {
+    for (const f of FACTIONS) {
+      const mean = chList.reduce((s, ch) => s + ((ch.faction_trust || {})[f] || 0), 0) / chList.length;
+      state.factionTrust[f] = clamp((state.factionTrust[f] || 0) + mean, -100, 100);
+    }
   }
 
   for (const obs of state.aliveActors()) {

@@ -101,18 +101,21 @@ const TUNING = {
       "influence_gain": 0.8,
       "stress_gain": 1.2,
       "vote_weight": 1,
+      "vote_threat_weight": 1,
       "passive_stress": 0
     },
     "mid": {
       "influence_gain": 1,
       "stress_gain": 1,
       "vote_weight": 1.5,
+      "vote_threat_weight": 0.7,
       "passive_stress": 1
     },
     "senior": {
       "influence_gain": 1.2,
       "stress_gain": 0.9,
       "vote_weight": 2,
+      "vote_threat_weight": 0.74,
       "passive_stress": 0,
       "vote_target_bonus": 0.1
     }
