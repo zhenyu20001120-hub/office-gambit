@@ -29,8 +29,8 @@ const MAJORS = [
     choices: [
       { id: "M01c1", label: "老实记下每一条规矩", arch: "obey", lean: "FV_D", side: "left" },
       { id: "M01c2", label: "主动加讲师微信请教", arch: "ally", lean: "FV_B", side: "left" },
-      { id: "M01c3", label: "复盘时抢答露一手", arch: "invest", lean: "FV_A", side: "right" },
-      { id: "M01c4", label: "私下打探「末位淘汰」实情", arch: "expose", lean: "FV_C", side: "right" },
+      { id: "M01c3", label: "私下打探「末位淘汰」实情", arch: "dodge", lean: "FV_A", side: "right" },
+      { id: "M01c4", label: "复盘时抢答露一手", arch: "invest", lean: "FV_C", side: "right" },
     ],
   },
   {
@@ -46,8 +46,8 @@ const MAJORS = [
     choices: [
       { id: "M02c1", label: "点头称是，不多嘴", arch: "hedge", lean: "FV_D", side: "left" },
       { id: "M02c2", label: "顺杆爬认个门生", arch: "ally", lean: "FV_C", side: "left" },
-      { id: "M02c3", label: "当场表态跟总走", arch: "betray", lean: "FV_A", side: "right" },
-      { id: "M02c4", label: "借敬酒探旁人底细", arch: "expose", lean: "FV_C", side: "right" },
+      { id: "M02c3", label: "高调表忠心赌一把押注靠山", arch: "obey", lean: "FV_A", side: "right" },
+      { id: "M02c4", label: "当场表态跟总走", arch: "betray", lean: "FV_C", side: "right" },
     ],
   },
   {
@@ -63,8 +63,8 @@ const MAJORS = [
     choices: [
       { id: "M03c1", label: "假装没察觉，照常去", arch: "dodge", lean: "FV_D", side: "left" },
       { id: "M03c2", label: "带零食主动破冰", arch: "ally", lean: "FV_B", side: "left" },
-      { id: "M03c3", label: "自己组个新人局", arch: "invest", lean: "FV_A", side: "right" },
-      { id: "M03c4", label: "把试探原样抛回去", arch: "expose", lean: "FV_C", side: "right" },
+      { id: "M03c3", label: "远远观察不接话，暗记谁说了什么", arch: "hedge", lean: "FV_A", side: "right" },
+      { id: "M03c4", label: "自己组个新人局", arch: "invest", lean: "FV_C", side: "right" },
     ],
   },
   {
@@ -80,8 +80,8 @@ const MAJORS = [
     choices: [
       { id: "M04c1", label: "报喜不报忧", arch: "obey", lean: "FV_D", side: "left" },
       { id: "M04c2", label: "认真解释公司前景", arch: "ally", lean: "FV_B", side: "left" },
-      { id: "M04c3", label: "借势立「我在上升期」人设", arch: "invest", lean: "FV_A", side: "right" },
-      { id: "M04c4", label: "含糊其辞留退路", arch: "hedge", lean: "FV_C", side: "right" },
+      { id: "M04c3", label: "半真半假留后路，防被念", arch: "self", lean: "FV_A", side: "right" },
+      { id: "M04c4", label: "立上进人设换自主权", arch: "invest", lean: "FV_C", side: "right" },
     ],
   },
   {
@@ -97,8 +97,8 @@ const MAJORS = [
     choices: [
       { id: "M05c1", label: "按流程稳稳推进", arch: "dodge", lean: "FV_B", side: "left" },
       { id: "M05c2", label: "多跑两趟混脸熟", arch: "ally", lean: "FV_B", side: "left" },
-      { id: "M05c3", label: "让利抢下首单", arch: "invest", lean: "FV_A", side: "right" },
-      { id: "M05c4", label: "把难搞环节甩给经理", arch: "shield", lean: "FV_D", side: "right" },
+      { id: "M05c3", label: "保守承诺暗留余地", arch: "dodge", lean: "FV_A", side: "right" },
+      { id: "M05c4", label: "让利抢单", arch: "invest", lean: "FV_D", side: "right" },
     ],
   },
   {
@@ -114,8 +114,8 @@ const MAJORS = [
     choices: [
       { id: "M06c1", label: "全交材料，不解释", arch: "obey", lean: "FV_D", side: "left" },
       { id: "M06c2", label: "主动补正说明", arch: "shield", lean: "FV_B", side: "left" },
-      { id: "M06c3", label: "咬出前任的责任", arch: "expose", lean: "FV_C", side: "right" },
-      { id: "M06c4", label: "暗示总监也知情", arch: "betray", lean: "FV_A", side: "right" },
+      { id: "M06c3", label: "先认了再洗", arch: "self", lean: "FV_C", side: "right" },
+      { id: "M06c4", label: "咬出前任的责任", arch: "betray", lean: "FV_A", side: "right" },
     ],
   },
   {
@@ -131,8 +131,8 @@ const MAJORS = [
     choices: [
       { id: "M07c1", label: "接受结果，低调收尾", arch: "obey", lean: "FV_D", side: "left" },
       { id: "M07c2", label: "请教主管改进点", arch: "ally", lean: "FV_B", side: "left" },
-      { id: "M07c3", label: "甩出超额数据争 A", arch: "invest", lean: "FV_A", side: "right" },
-      { id: "M07c4", label: "质疑评分口径", arch: "expose", lean: "FV_C", side: "right" },
+      { id: "M07c3", label: "低调收尾暗留痕", arch: "dodge", lean: "FV_A", side: "right" },
+      { id: "M07c4", label: "甩出超额数据争 A", arch: "invest", lean: "FV_C", side: "right" },
     ],
   },
   {
@@ -146,10 +146,10 @@ const MAJORS = [
       { title: "总监的沉默", text: "你在群里等总监表态，他只回了个「处理中」的表情。", flavor: "大领导的沉默，是最响的站队。" },
     ],
     choices: [
-      { id: "M08c1", label: "连夜兜底救火", arch: "grind", lean: "FV_B", side: "left" },
-      { id: "M08c2", label: "拉技术一起扛", arch: "shield", lean: "FV_D", side: "left" },
-      { id: "M08c3", label: "先斩后奏切降级", arch: "invest", lean: "FV_A", side: "right" },
-      { id: "M08c4", label: "公开指认技术责任", arch: "betray", lean: "FV_C", side: "right" },
+      { id: "M08c1", label: "连夜兜底救火", arch: "hedge", lean: "FV_B", side: "left" },
+      { id: "M08c2", label: "拉技术一起扛", arch: "ally", lean: "FV_D", side: "left" },
+      { id: "M08c3", label: "连夜兜底暗自扛", arch: "self", lean: "FV_A", side: "right" },
+      { id: "M08c4", label: "先斩后奏切降级", arch: "risk", lean: "FV_C", side: "right" },
     ],
   },
   {
@@ -164,9 +164,9 @@ const MAJORS = [
     ],
     choices: [
       { id: "M09c1", label: "回复模糊的「收到」", arch: "hedge", lean: "FV_D", side: "left" },
-      { id: "M09c2", label: "两边都客客气气", arch: "dodge", lean: "FV_B", side: "left" },
-      { id: "M09c3", label: "明确站甲总", arch: "betray", lean: "FV_A", side: "right" },
-      { id: "M09c4", label: "借题向乙总表忠", arch: "ally", lean: "FV_C", side: "right" },
+      { id: "M09c2", label: "两边都客客气气", arch: "ally", lean: "FV_B", side: "left" },
+      { id: "M09c3", label: "明确站甲总", arch: "obey", lean: "FV_A", side: "right" },
+      { id: "M09c4", label: "借题向乙总表忠", arch: "invest", lean: "FV_C", side: "right" },
     ],
   },
   {
@@ -182,8 +182,8 @@ const MAJORS = [
     choices: [
       { id: "M10c1", label: "按兵不动等官宣", arch: "dodge", lean: "FV_D", side: "left" },
       { id: "M10c2", label: "找现主管表忠留任", arch: "ally", lean: "FV_B", side: "left" },
-      { id: "M10c3", label: "主动请缨去新部门", arch: "invest", lean: "FV_A", side: "right" },
-      { id: "M10c4", label: "放出想走的信号抬价", arch: "expose", lean: "FV_C", side: "right" },
+      { id: "M10c3", label: "主动请缨去新部门", arch: "self", lean: "FV_A", side: "right" },
+      { id: "M10c4", label: "放出想走的信号抬价", arch: "risk", lean: "FV_C", side: "right" },
     ],
   },
   {

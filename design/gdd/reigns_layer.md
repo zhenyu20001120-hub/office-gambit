@@ -177,6 +177,8 @@ for card in cards:
 
 ## 4. 左右二选一映射（2–4 选项收敛为「左 / 右」）
 
+> ⚠️ **本节已被 `quadrant-system.md` 的「四象限决策网格」方案取代**（主理人已拍板）。** `card.reigns={left,right}` 已废弃，改为 `card.quadrants={sp,sa,rp,ra}`；王权式左右滑卡改为 2×2 网格（点击 + 键盘 1–4）。** 下方 left/right 收敛规则仅作历史参考，落地以 quadrant-system.md 为准。
+
 ### 4.1 收敛规则（确定性、可复现）
 
 **主规则 · 立场轴（arch-pole）**：把每个选项按 `arch` 归入「稳妥 / 进取」两极。
@@ -346,6 +348,8 @@ if target.is_player and target.network < 20:       # 人脉低被群起而攻
 - `#bar-energy` 显示值 = `100 - stress`；`#bar-influence` 显示名改为「声望」但 `id` 保留 `bar-influence`（不动 engine 字段）。
 
 ### 7.2 卡片呈现与三操作（改造 `#stage`）
+
+> ⚠️ **本节已被 `quadrant-system.md` 取代**：`.reign-card` 左右滑卡改为 2×2 四象限网格（`.quad-card` / `.quad-cell`，键 1–4），见 quadrant-system.md §C。下方 `#reign-card` 结构仅作历史参考。
 
 ```
 #reign-card（整卡，滑动热区）

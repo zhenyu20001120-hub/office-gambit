@@ -17,6 +17,11 @@
   --fvb: #2E5FB2;
   --fvc: #7A3BA2;
   --fvd: #C8923A;
+  /* 四象限强调色（art-bible §10.3）：SA 稳进 / RA 猛进 / SP 守成 / RP 铤险 */
+  --q-sa: #36B0A4;
+  --q-ra: #E0702C;
+  --q-sp: #5E7C78;
+  --q-rp: #9C6E42;
   --r: 8px;
   --font-ui: "Microsoft YaHei", "PingFang SC", "Source Han Sans SC", "Noto Sans CJK SC", SimHei, sans-serif;
   --font-serif: "Source Han Serif SC", "Noto Serif CJK SC", STSong, "Microsoft YaHei", serif;
@@ -233,33 +238,82 @@ body { scrollbar-color: #3a3128 #14110F; }
 @keyframes barWarn { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.55); } }
 @keyframes barDanger { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.8); } }
 
-/* 二选一卡：整卡滑动热区，左右两半区 */
-.reign-card {
-  width: 100%; max-width: 760px; background: var(--bg-panel);
+/* 四象限决策网格：2×2（左上 SA / 右上 RA / 左下 SP / 右下 RP） */
+.quad-card {
+  width: 100%; max-width: 780px; background: var(--bg-panel);
   border: 1px solid rgba(200,146,58,.3); border-radius: 12px; padding: 16px 18px;
-  box-shadow: 0 4px 16px rgba(0,0,0,.55); touch-action: none;
-  display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px;
-  transition: transform .18s ease; will-change: transform;
+  box-shadow: 0 4px 16px rgba(0,0,0,.55);
+  animation: cardIn .25s ease-out both;
 }
-.reign-card.dragging { transition: none; }
-.reign-card > .card-head, .reign-card > .card-title, .reign-card > .card-text { flex: 1 1 100%; }
-.reign-left, .reign-right {
-  flex: 1 1 calc(50% - 5px); min-width: 0; min-height: 88px;
-  display: flex; flex-direction: column; justify-content: center; gap: 6px;
-  padding: 12px 14px; border-radius: 10px; cursor: pointer;
-  border: 1px solid transparent; transition: filter .12s, background .12s;
+.quad-card.card-out { animation: cardOut .20s ease-out both; }
+.quad-card.low-energy { border-color: rgba(214,69,61,.5); }
+.quad-card > .card-head { margin: 0 0 6px; }
+.quad-card > .card-title { font-family: var(--font-serif); font-size: 22px; color: var(--glow); margin: 0 0 6px; }
+.quad-card > .card-text { font-size: 14px; color: var(--text-1); line-height: 1.65; margin: 0 0 6px; }
+.quad-card > .card-flavor { font-size: 13px; color: var(--text-2); font-style: italic; margin: 0 0 8px; }
+
+.quad-lowenergy {
+  margin: 8px 0; padding: 8px 12px; border-radius: 8px; font-size: 13px;
+  background: rgba(214,69,61,.14); border: 1px solid rgba(214,69,61,.5); color: #F1B4AE;
+}
+.quad-board { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 4px; }
+.quad-y { font-size: 12px; color: var(--text-2); letter-spacing: 1px; }
+.quad-y-pos { color: #8FB7AE; }
+.quad-y-neg { color: #9C8C6E; }
+.quad-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%;
+  position: relative;
+}
+.quad-cell {
+  display: flex; flex-direction: column; gap: 5px; text-align: left;
+  padding: 12px 14px; border-radius: 10px; cursor: pointer; min-height: 132px;
+  border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04);
+  color: var(--text-1); font-family: var(--font-ui); font-size: 14px; line-height: 1.45;
+  transition: filter .12s ease-out, transform .12s ease-out, opacity .25s ease, background .12s ease-out;
   user-select: none; -webkit-user-select: none;
+  animation: cardIn .25s ease-out both;
 }
-.reign-left { background: rgba(63,167,106,.12); border-color: rgba(63,167,106,.5); text-align: left; align-items: flex-start; }
-.reign-right { background: rgba(180,58,46,.12); border-color: rgba(180,58,46,.5); text-align: right; align-items: flex-end; }
-.reign-left:hover, .reign-left:focus-visible { filter: brightness(1.15); outline: 2px solid #3FA76A; outline-offset: 1px; }
-.reign-right:hover, .reign-right:focus-visible { filter: brightness(1.15); outline: 2px solid #D0604E; outline-offset: 1px; }
-.reign-side-label { font-size: 13px; font-weight: 700; }
-.reign-left .reign-side-label { color: #3FA76A; }
-.reign-right .reign-side-label { color: #D0604E; }
-.reign-choice-label { font-size: 15px; color: var(--text-1); font-weight: 600; overflow-wrap: break-word; }
-.reign-eff { font-size: 12px; color: var(--text-2); font-family: monospace; }
-.swipe-hint { flex: 1 1 100%; margin-top: 2px; font-size: 12px; color: var(--text-2); text-align: center; }
+.quad-cell:hover, .quad-cell:focus-visible {
+  filter: brightness(1.12); outline: 2px solid var(--glow); outline-offset: 1px;
+  animation: quadHover .12s ease-out;
+}
+.quad-cell.chosen { animation: quadSelect .30s ease-out; z-index: 4; }
+.quad-cell.dimmed { opacity: .45; pointer-events: none; transition: opacity .25s ease; }
+.quad-cell.disabled { cursor: not-allowed; opacity: .5; filter: grayscale(.4); }
+.quad-cell.disabled:hover, .quad-cell.disabled:focus-visible { filter: grayscale(.4) brightness(.9); outline: none; animation: none; }
+.quad-cell.q-sa { border-color: rgba(54,176,164,.55); background: rgba(54,176,164,.10); }
+.quad-cell.q-ra { border-color: rgba(224,112,44,.55); background: rgba(224,112,44,.10); }
+.quad-cell.q-sp { border-color: rgba(94,124,120,.55); background: rgba(94,124,120,.10); }
+.quad-cell.q-rp { border-color: rgba(156,110,66,.55); background: rgba(156,110,66,.10); }
+.quad-cell.q-sa:hover, .quad-cell.q-sa:focus-visible { outline-color: var(--q-sa); }
+.quad-cell.q-ra:hover, .quad-cell.q-ra:focus-visible { outline-color: var(--q-ra); }
+.quad-cell.q-sp:hover, .quad-cell.q-sp:focus-visible { outline-color: var(--q-sp); }
+.quad-cell.q-rp:hover, .quad-cell.q-rp:focus-visible { outline-color: var(--q-rp); }
+.quad-name { font-size: 14px; font-weight: 700; letter-spacing: 1px; }
+.quad-cell.q-sa .quad-name { color: #5FD0C2; }
+.quad-cell.q-ra .quad-name { color: #F1914F; }
+.quad-cell.q-sp .quad-name { color: #8FB0AB; }
+.quad-cell.q-rp .quad-name { color: #C79A6A; }
+.quad-label { font-size: 15px; font-weight: 600; overflow-wrap: break-word; }
+.quad-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.5; overflow-wrap: break-word; }
+.quad-consequence { font-size: 12px; color: #9FB8A0; line-height: 1.5; overflow-wrap: break-word; }
+.quad-eff { font-size: 11.5px; color: var(--text-2); font-family: monospace; margin-top: 2px; }
+.quad-tone { font-size: 11.5px; color: #C9B98E; }
+.quad-lock { font-size: 11px; color: #F1B4AE; margin-top: 2px; }
+.float-feedback {
+  position: absolute; left: 50%; top: 38%; transform: translateX(-50%);
+  font-size: 13px; color: var(--glow); pointer-events: none; z-index: 5; white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(0,0,0,.8); animation: floatUp .6s ease-out forwards;
+}
+.quad-x { display: flex; justify-content: space-between; width: 100%; font-size: 12px; color: var(--text-2); }
+.quad-x-left { color: #5FD0C2; }
+.quad-x-right { color: #F1914F; }
+.quad-more {
+  margin-top: 10px; align-self: center; background: rgba(200,146,58,.16);
+  border: 1px solid rgba(200,146,58,.5); color: var(--glow); border-radius: 999px;
+  padding: 6px 16px; font-size: 13px; cursor: pointer; font-family: var(--font-ui);
+}
+.quad-more:hover, .quad-more:focus-visible { filter: brightness(1.15); outline: 2px solid var(--glow); outline-offset: 1px; }
 
 /* 危机弹层（全屏遮罩） */
 .crisis-modal {
@@ -283,16 +337,16 @@ body { scrollbar-color: #3a3128 #14110F; }
 
 @media (max-width: 768px) {
   .cash-pill { font-size: 12px; padding: 3px 10px; }
-  .reign-card { padding: 14px; gap: 8px; }
-  .reign-left, .reign-right { min-height: 76px; padding: 10px 12px; }
-  .reign-side-label { font-size: 12px; }
-  .reign-choice-label { font-size: 14px; }
+  .quad-card { padding: 14px; }
+  .quad-grid { gap: 8px; }
+  .quad-cell { min-height: 116px; padding: 10px 12px; }
+  .quad-name { font-size: 13px; }
+  .quad-label { font-size: 14px; }
   .crisis-inner { padding: 20px 18px; }
   .crisis-title { font-size: 22px; }
 }
-@media (max-width: 480px) {
-  .reign-left, .reign-right { min-height: 70px; padding: 9px 10px; }
-  .reign-choice-label { font-size: 13px; }
+  .quad-cell { min-height: 104px; padding: 9px 10px; }
+  .quad-label { font-size: 13px; }
 }
 
 /* =====================================================================
@@ -443,4 +497,41 @@ body { scrollbar-color: #3a3128 #14110F; }
   .bar-name { min-width: 3.8em; }
   .opt-btn { padding: 11px 10px; gap: 8px; }
   .reveal-row { font-size: 11px; padding: 6px; }
+}
+
+/* =====================================================================
+ * 克制流畅动画（art-bible §11）：振幅极小、无粒子/VFX/全屏抖动/派系流光
+ * ===================================================================== */
+@keyframes cardIn  { from { opacity: 0; transform: translateY(8px); }  to { opacity: 1; transform: translateY(0); } }
+@keyframes cardOut { from { opacity: 1; transform: translateY(0); }   to { opacity: 0; transform: translateY(6px); } }
+@keyframes quadHover { from { transform: scale(1); } to { transform: scale(1.015); } }
+@keyframes quadSelect { 0% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.02); filter: brightness(1.15); } 100% { transform: scale(1); filter: brightness(1); } }
+@keyframes quadDim { from { opacity: 1; } to { opacity: .45; } }
+@keyframes floatUp { from { opacity: 0; transform: translateY(0); } to { opacity: 1; transform: translateY(-18px); } }
+@keyframes candleFlicker { 0%,100% { opacity: .92; } 50% { opacity: 1; } }
+@keyframes vignetteBreath { 0%,100% { opacity: .92; } 50% { opacity: 1; } }
+
+/* 烛光呼吸 + 暗角呼吸：固定覆盖层，振幅 <8%，pointer-events:none 不挡交互 */
+#candle-overlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: 41; opacity: 1;
+  background: radial-gradient(circle at 50% 36%, rgba(232,192,112,.10) 0%, rgba(0,0,0,0) 60%);
+  mix-blend-mode: screen; animation: candleFlicker 3.2s ease-in-out infinite;
+}
+#vignette-overlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: 40; opacity: 1;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0) 52%, rgba(0,0,0,.5) 100%);
+  mix-blend-mode: multiply; animation: vignetteBreath 4s ease-in-out infinite;
+}
+
+/* 无障碍：尊重「减少动态效果」——关闭位移/脉冲/呼吸，仅保留不刺眼的稳态样式 */
+@media (prefers-reduced-motion: reduce) {
+  .quad-card, .quad-cell { animation: none !important; transform: none !important; }
+  .quad-cell.chosen { animation: none !important; }
+  .quad-cell.dimmed { opacity: .45; }
+  .float-feedback { animation: none !important; }
+  #candle-overlay { animation: none !important; opacity: .96; }
+  #vignette-overlay { animation: none !important; opacity: .96; }
+  /* 资源条预警保留「稳态」危险描边（不闪烁） */
+  .bar-fill.warn { animation: none !important; box-shadow: 0 0 8px rgba(224,165,46,.85); }
+  .bar-fill.danger { animation: none !important; box-shadow: 0 0 10px rgba(214,69,61,.95); }
 }

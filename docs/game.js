@@ -161,50 +161,110 @@ function choiceTone(ch) {
   return tags.join(" · ");
 }
 
-// 【展示层】选择后动态旁白：根据本次表盘升降 + 派系信任变化组合确定性模板生成。
-// prevState：应用本次选项前的玩家快照 {performance,network,influence,stress}；state：应用后。
-// 派系信任以该选项自身的 faction_trust 增量表述（全局信任矩阵在 AI 结算后才累加）。
+/* ---- 【展示层】局势旁白（落地 design/gdd/narration-spec.md §C 硬口径） ----
+ * 形态：一句话——中文逗号连接、句末句号、无分号无多段，长度 25–48 字。
+ * 内容：{主变化句}，{领先派系句}，{告急句}，{月进度句}。 全部由 state 确定性推导，无随机。
+ * 领先派系取【全局】state.factionTrust 的 argmax（§C.2），不再用 choice.faction_trust——
+ * 旧实现只讲单个选项的派系增量，无法概括全局局势；choice 形参保留仅为维持调用方合约不变。
+ * 【时序】showNarration 在 check_edges 之后、AI 落子与派系增量累加（见本文件「修复1」段）之前调用，
+ * 故此处 state.factionTrust 是「此前各牌累计成型的盘面」，本张牌的全场派系增量尚不可知
+ * （需等全体 AI 选完才能算均值），旁白表述「当前已成型的局势」正确，无需改调用方合约。
+ */
+// 派系立场名：与 cards.js 的 consequence 玩家可见文案（如「（抢单派会更信你）」）同名同源。
+// 不可改用 factionAlias()——它返回的是合资公司别名（锐盟/衡明/星海/长安），卡面文案中从未出现。
+const NARR_FACTION_SIDE = { FV_A: "抢单派", FV_B: "维稳派", FV_C: "上位派", FV_D: "降压派" };
+const NARR_SIGNIFICANT = 5;    // §C.0 主变化句触发阈值：|d| >= 5
+const NARR_STRONG = 8;         // §C.1 强档阈值：|d| >= 8（5–7 为中档）
+const NARR_MAX_LEN = 48;       // §C.6 软上限（硬口径上界 48）：主理人拍板 42→48，令 §C.3 月进度完整形态常驻
+// §C.1 主变化句表：维度 → 方向 → [强档(≥8), 中档(5–7)]
+const NARR_MAIN = {
+  performance: {
+    up: ["业绩的红线上，你又往前拱了一寸", "业绩缓过劲，数字往上抬了些"],
+    down: ["手里那点业绩，又被划走一截", "业绩这波没顶住，略微下挫"],
+  },
+  network: {
+    up: ["人脉这一下活络开来，路子宽了", "多搭了几句话，人缘又热乎些"],
+    down: ["你这一手，把几个人脉线掐断了", "几处关系有点松动，得防着点"],
+  },
+  influence: {
+    up: ["你这回露了脸，风评一下蹿起来", "这手处理得漂亮，风评小涨一截"],
+    down: ["你这一出，声望当场掉了不少", "话没说圆，口碑悄悄凉了半截"],
+  },
+  energy: {
+    up: ["一口气松下来，肩膀终于不僵了", "紧绷的弦松了半格，人轻松些"],
+    down: ["你揉了揉太阳穴，今天是不眠夜", "精力又被抽走一截，有点发虚"],
+  },
+};
+const NARR_NEUTRAL = "这一步落子，盘面没太大动静";       // §C.4 无显著变化但全局有信号
+const NARR_FALLBACK = [                                   // §C.5 纯兜底，按 month % 3 确定性选取
+  "茶水间的风声没停过，你在这盘棋里还没真正站稳脚跟。",
+  "烛火没灭，局也没散，你只是还没看清这屋里谁在落子。",
+  "有人记住了你这一手，可眼下这盘棋还看不出谁占上风。",
+];
+// §C.3 月进度句：返回 [完整形态, 短形态, 仅 label]。短形态是 §C.6 裁剪用的中间档（保留领起词，
+// 比直接降为裸 label 更连贯）；四段全满时完整形态会顶破长度预算，故裁剪链一般落在短形态/label。
+function narrMonthForms(month) {
+  const label = monthLabel(month).label;
+  if (month <= 6) return [`${label}，你才刚进场`, `${label}，刚进场`, label];
+  if (month <= 24) return [`到了${label}，棋局渐明`, `到了${label}`, label];
+  if (month <= 48) return [`转眼${label}进度过半`, `转眼${label}`, label];
+  return [`熬到${label}收尾在即`, `熬到${label}`, label];
+}
 function narrationFor(choice, prev, state) {
   const p = state.player();
-  const dPerf = p.performance - prev.performance;
-  const dNet = p.network - prev.network;
-  const dInf = p.influence - prev.influence;
-  const dEnergy = (100 - p.stress) - (100 - prev.stress);   // 精力增量
-  const ft = choice.faction_trust || {};
-  const lines = [];
-  if (dPerf <= -8) lines.push("这一下，你手里的数字又难看了几分。");
-  else if (dPerf >= 8) lines.push("业绩的红线上，你又往前拱了一寸。");
-  if (dEnergy <= -8) lines.push("你揉了揉太阳穴，今天注定是个不眠夜。");
-  else if (dEnergy >= 8) lines.push("一口气松下来，肩膀终于不僵了。");
-  if (dInf >= 8) lines.push("这回你露了脸，有人开始拿你当对手。");
-  let topF = null, topV = -1e9, botF = null, botV = 1e9;
+  const m = clamp(Math.round(state.month || 1), 1, 60);
+  if (!p) return NARR_FALLBACK[m % 3];
+  prev = prev || {};
+  // 1) 本次增量（§0 口径）：energy = 100 - stress
+  const dPerf = (p.performance || 0) - (prev.performance || 0);
+  const dNet = (p.network || 0) - (prev.network || 0);
+  const dInf = (p.influence || 0) - (prev.influence || 0);
+  const dEnergy = (100 - (p.stress || 0)) - (100 - (prev.stress || 0));
+  // 2) 主变化维度：取 |值| 最大者；同大按 performance > network > influence > energy 定序
+  const dims = [["performance", dPerf], ["network", dNet], ["influence", dInf], ["energy", dEnergy]];
+  let domKey = dims[0][0], domVal = dims[0][1];
+  for (const [k, v] of dims) if (Math.abs(v) > Math.abs(domVal)) { domKey = k; domVal = v; }
+  const maxAbs = Math.abs(domVal);
+  // 3) 全局领先派系（§C.2）：argmax(state.factionTrust)；spread >= 3 且 lead > 0 才算明确领先
+  const ft = state.factionTrust || {};
+  let leadF = FACTIONS[0], leadV = -Infinity, secondV = -Infinity;
   for (const f of FACTIONS) {
     const v = Number(ft[f] || 0);
-    if (v > topV) { topV = v; topF = f; }
-    if (v < botV) { botV = v; botF = f; }
+    if (v > leadV) { secondV = leadV; leadV = v; leadF = f; }
+    else if (v > secondV) { secondV = v; }
   }
-  if (topF && topV >= 5) lines.push(`${factionAlias(topF)}今天站你这边。`);
-  if (botF && botV <= -5) lines.push(`${factionAlias(botF)}把你划进了名单。`);
-  if (!lines.length) {
-    const byArch = {
-      grind: "埋头做事的人，最容易被当作理所当然。",
-      obey: "你点了头，难的事留给了别人。",
-      betray: "有人记住了你这一手。",
-      ally: "人情这种东西，记在心里也记在账上。",
-      expose: "台面下的事，被你翻到了台面上。",
-      self: "先保住自己，别的以后再说。",
-      hedge: "模糊一点，今天就能平安过去。",
-      dodge: "流程走完，谁也挑不出错。",
-      invest: "钱花出去了，效果还没看见。",
-      risk: "你赌了一把，结果要过阵子才知道。",
-      shield: "替人扛了雷，自己身上也沾了灰。",
-      leak: "话传出去了，收不回来。",
-      bow: "你低了头，对方却不一定领情。",
-      cashin: "落袋为安，今天先顾好自己。",
-    };
-    lines.push(byArch[choice.arch] || "局面静悄悄，但没人真的松手。");
+  const clearLead = leadV > 0 && (leadV - secondV) >= 3;
+  // 4) 告急表盘（§C.3）：perf/net/inf < 20 或 stress > 80（即 energy < 20，表盘名用「精力」）
+  const alarms = [];
+  if ((p.performance || 0) < 20) alarms.push(reignMeterLabel("performance"));
+  if ((p.network || 0) < 20) alarms.push(reignMeterLabel("network"));
+  if ((p.influence || 0) < 20) alarms.push(reignMeterLabel("influence"));
+  if ((p.stress || 0) > 80) alarms.push(reignMeterLabel("stress"));
+  // 5) 纯兜底（§C.5）：无显著变化 且 无明确领先 且 无告急 → 整句返回，不走四段装配
+  if (maxAbs < NARR_SIGNIFICANT && !clearLead && !alarms.length) return NARR_FALLBACK[m % 3];
+  // 6) 四段装配（§C.0）：每段给出「长→短」候选，供 §C.6 长度自控逐级降级
+  const s1 = maxAbs >= NARR_SIGNIFICANT
+    ? NARR_MAIN[domKey][domVal >= 0 ? "up" : "down"].slice(maxAbs >= NARR_STRONG ? 0 : 1)
+    : [NARR_NEUTRAL];
+  const side = NARR_FACTION_SIDE[leadF] || factionAlias(leadF);
+  const s2 = clearLead ? [`眼下${side}势头最盛`, `${side}占上风`] : ["几家派系还在暗里拉锯", "几派还在拉锯"];
+  // 三处及以上告急若用「、」并列会顶破长度预算，故总述为「盘面红灯一片」（与「盘面暂时无虞」同主语）
+  const s3 = !alarms.length ? ["盘面暂时无虞"]
+    : alarms.length >= 3 ? ["盘面红灯一片"]
+      : [`${alarms.join("、")}已亮红灯`];
+  const s4 = narrMonthForms(m).concat([""]);   // 末档空串 = §B.2 允许的整段省略（兜底安全阀）
+  // 7) 长度自控（§C.6）：按优先级 月进度 → 领先派系 → 主变化强档降中档 → 省略月进度，压到 <= 上限
+  const forms = [s1, s2, s3, s4];
+  const pick = [0, 0, 0, 0];
+  const build = () => forms.map((f, i) => f[pick[i]]).filter((x) => x).join("，") + "。";
+  let out = build();
+  for (const [seg, idx] of [[3, 1], [3, 2], [1, 1], [0, 1], [3, 3]]) {
+    if (out.length <= NARR_MAX_LEN) break;
+    if (forms[seg][idx] === undefined) continue;
+    pick[seg] = idx;
+    out = build();
   }
-  return lines.join("");
+  return out;
 }
 
 /* ============================ 3. 随机数（MT19937，对齐 CPython random） ============================ */
@@ -913,10 +973,11 @@ async function resolveCard(state, card, controller) {
     let idx = await controller.pickCard(state, card);
     // 【Reigns §6.4】精力低（energy<=25 => stress>=75）：失态不再随机，强制滑向稳妥（reigns.left）
     if (player.stress >= 75) {
-      const leftId = (card.reigns && card.reigns.left) || (card.choices[0] && card.choices[0].id);
-      const li = card.choices.findIndex((ch) => ch.id === leftId);
-      if (li >= 0) {
-        idx = li;
+      // 【四象限】过劳只能求稳：激进两格（RA/RP）置灰，强制在稳妥两格（SP/SA）中择一
+      const safe = card.choices.slice(0, 4).filter((ch) => ch.quadrant === "stable_passive" || ch.quadrant === "stable_active");
+      if (safe.length) {
+        const pick = safe[state.rng.randrange(safe.length)];
+        idx = card.choices.indexOf(pick);
         state.logMsg(`【失态】你精力透支，手不受控地滑向稳妥（${card.choices[idx].label}）。`);
       }
     } else if (player.stress >= DERIVED.stress_high &&
@@ -1458,7 +1519,7 @@ let DOM = null;
 let STATE = null;
 let CURRENT_CONTROLLER = null;
 // 【Reigns】当前激活的「二选一」卡节点（供全局键盘处理 ←/→、数字展开）
-let CURRENT_REIGN_NODE = null;
+let CURRENT_QUAD_NODE = null;
 
 function h(tag, attrs, children) {
   const el = document.createElement(tag);
@@ -1641,12 +1702,21 @@ class GUIController extends Controller {
   }
   pickCard(state, card) {
     STATE = state; state.phase = "day_cards"; renderLog(state);
-    const leftId = (card.reigns && card.reigns.left) || (card.choices[0] && card.choices[0].id);
-    const rightId = (card.reigns && card.reigns.right) || (card.choices[card.choices.length - 1] && card.choices[card.choices.length - 1].id);
-    const leftCh = card.choices.find((ch) => ch.id === leftId) || card.choices[0];
-    const rightCh = card.choices.find((ch) => ch.id === rightId) || card.choices[card.choices.length - 1];
+    const player = state.player();
+    // 精力低（energy<=25 => stress>=75）：过劳只能求稳，禁用两个激进象限（RA/RP）
+    const lowEnergy = player.stress >= 75;
 
-    const node = h("div", { class: "reign-card" }, [
+    // 唯一真值表：左上=1 SA(稳积·经营) / 右上=2 RA(激积·搏进) / 左下=3 SP(稳消·守成) / 右下=4 RP(激消·险守)
+    const ORDER = [
+      { key: "1", q: "stable_active", cls: "q-sa", name: "稳积·经营" },
+      { key: "2", q: "risky_active", cls: "q-ra", name: "激积·搏进" },
+      { key: "3", q: "stable_passive", cls: "q-sp", name: "稳消·守成" },
+      { key: "4", q: "risky_passive", cls: "q-rp", name: "激消·险守" },
+    ];
+    const byQ = {};
+    for (const ch of card.choices.slice(0, 4)) byQ[ch.quadrant] = ch;
+
+    const node = h("div", { class: "quad-card" + (lowEnergy ? " low-energy" : "") }, [
       h("div", { class: "card-head" }, [
         h("span", { class: "card-cat-icon" }, CATEGORY_ICONS[card.category] || "📄"),
         h("span", { class: "card-cat" }, card.category),
@@ -1655,71 +1725,73 @@ class GUIController extends Controller {
       h("p", { class: "card-text" }, card.text),
       card.flavor ? h("p", { class: "card-flavor" }, card.flavor) : null,
     ]);
-    const leftPanel = h("div", {
-      class: "reign-left", role: "button", tabindex: "0",
-      "aria-label": `稳妥选项：${leftCh.label}。${choiceSummary(leftCh)}`,
-    }, [
-      h("div", { class: "reign-side-label" }, "◀ 稳妥"),
-      h("div", { class: "reign-choice-label" }, leftCh.label),
-      h("div", { class: "reign-eff" }, choiceSummary(leftCh)),
-      h("div", { class: "opt-tone" }, choiceTone(leftCh)),
-    ]);
-    const rightPanel = h("div", {
-      class: "reign-right", role: "button", tabindex: "0",
-      "aria-label": `进取选项：${rightCh.label}。${choiceSummary(rightCh)}`,
-    }, [
-      h("div", { class: "reign-side-label" }, "▶ 进取"),
-      h("div", { class: "reign-choice-label" }, rightCh.label),
-      h("div", { class: "reign-eff" }, choiceSummary(rightCh)),
-      h("div", { class: "opt-tone" }, choiceTone(rightCh)),
-    ]);
-    node.appendChild(leftPanel);
-    node.appendChild(rightPanel);
-    node.appendChild(h("div", { class: "swipe-hint" }, "滑动 / 点左右 / ← →（A D）二选一　·　按数字展开全部"));
+    if (lowEnergy) node.appendChild(h("div", { class: "quad-lowenergy" }, "精力不支，激进动作（搏进 / 险守）暂时打不开——只能求稳。"));
 
-    const choose = (side) => {
+    const keyOf = {}; ORDER.forEach((o) => { keyOf[o.q] = o.key; });
+    const choose = (q) => {
       if (node._done) return;
+      const ch = byQ[q];
+      if (!ch) return;
+      if (lowEnergy && (q === "risky_active" || q === "risky_passive")) return; // 激进格置灰，不可选
       node._done = true;
-      CURRENT_REIGN_NODE = null;
-      const ch = side === "left" ? leftCh : rightCh;
+      // 克制流畅：选中格脉冲、其余淡出、后果漂浮上浮，随后整卡退出
+      grid.querySelectorAll(".quad-cell").forEach((el) => {
+        if (el.getAttribute("data-key") === keyOf[q]) el.classList.add("chosen");
+        else el.classList.add("dimmed");
+      });
+      const fb = h("div", { class: "float-feedback" }, ch.consequence);
+      grid.appendChild(fb);
+      setTimeout(() => { if (fb.parentNode) fb.parentNode.removeChild(fb); }, 700);
+      node.classList.add("card-out");
+      CURRENT_QUAD_NODE = null;
       const idx = card.choices.indexOf(ch);
-      if (node._finish) setTimeout(() => node._finish(idx), 120);
+      if (node._finish) setTimeout(() => node._finish(idx), 200);
     };
-    node._left = () => choose("left");
-    node._right = () => choose("right");
-    leftPanel.addEventListener("click", () => choose("left"));
-    rightPanel.addEventListener("click", () => choose("right"));
-    leftPanel.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose("left"); } });
-    rightPanel.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose("right"); } });
 
-    // 滑动（pointer / touch）：位移过半屏确认对应侧，未过半回弹
-    let startX = 0, dragging = false, w = 0;
-    const onDown = (e) => {
-      dragging = true; startX = (e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX);
-      w = node.getBoundingClientRect().width; node.classList.add("dragging");
-    };
-    const onMove = (e) => {
-      if (!dragging) return;
-      const x = (e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX);
-      node.style.transform = `translateX(${x - startX}px)`;
-      if (e.cancelable) e.preventDefault();
-    };
-    const onUp = (e) => {
-      if (!dragging) return;
-      dragging = false;
-      const x = (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : e.clientX);
-      const dx = x - startX;
-      node.style.transform = "";
-      node.classList.remove("dragging");
-      if (dx <= -w / 2) choose("right");
-      else if (dx >= w / 2) choose("left");
-    };
-    node.addEventListener("pointerdown", onDown);
-    node.addEventListener("pointermove", onMove);
-    node.addEventListener("pointerup", onUp);
-    node.addEventListener("pointercancel", onUp);
+    const board = h("div", { class: "quad-board" });
+    board.appendChild(h("div", { class: "quad-y quad-y-pos" }, "▲ 积极 · 扩张联结"));
+    const grid = h("div", { class: "quad-grid" });
+    for (const o of ORDER) {
+      const ch = byQ[o.q];
+      if (!ch) continue;
+      const disabled = lowEnergy && (o.q === "risky_active" || o.q === "risky_passive");
+      const aria = disabled
+        ? `${o.name}（键 ${o.key}）：精力不支，暂时打不开`
+        : `${o.name}（键 ${o.key}）：${ch.label}。${choiceSummary(ch)} ${choiceTone(ch)}`;
+      const cell = h("button", {
+        class: "quad-cell " + o.cls + (disabled ? " disabled" : ""),
+        role: "button", tabindex: disabled ? "-1" : "0", "aria-label": aria, "data-key": o.key,
+      }, [
+        h("div", { class: "quad-name" }, o.name),
+        h("div", { class: "quad-label" }, ch.label),
+        h("div", { class: "quad-desc" }, ch.desc),
+        h("div", { class: "quad-consequence" }, ch.consequence),
+        h("div", { class: "quad-eff" }, choiceSummary(ch)),
+        h("div", { class: "quad-tone" }, choiceTone(ch)),
+        disabled ? h("div", { class: "quad-lock" }, "精力不支") : null,
+      ]);
+      if (!disabled) {
+        cell.addEventListener("click", () => choose(o.q));
+        cell.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(o.q); } });
+      }
+      grid.appendChild(cell);
+    }
+    board.appendChild(grid);
+    board.appendChild(h("div", { class: "quad-y quad-y-neg" }, "▼ 消极 · 收缩自保"));
+    board.appendChild(h("div", { class: "quad-x" }, [
+      h("span", { class: "quad-x-left" }, "◀ 稳妥 · 不冒险"),
+      h("span", { class: "quad-x-right" }, "激进 · 敢搏 ▶"),
+    ]));
+    node.appendChild(board);
 
-    // 数字键展开全部原始选项（无障碍进阶）
+    // >4 选项：无障碍「展开全部」入口
+    if (card.choices.length > 4) {
+      const moreBtn = h("button", { class: "quad-more" }, `展开全部选项（${card.choices.length}）`);
+      moreBtn.addEventListener("click", () => node._expand && node._expand());
+      node.appendChild(moreBtn);
+    }
+
+    node._chooseKey = (k) => { const o = ORDER.find((x) => x.key === k); if (o) choose(o.q); };
     node._expand = () => {
       if (node._done) return;
       pickFromPanel({
@@ -1727,14 +1799,16 @@ class GUIController extends Controller {
         desc: `《${card.title}》的原始选项（点击或按数字选择）：`,
         options: card.choices.map((ch, i) => ({ label: `${CIRCLED[i] || (i + 1)} ${ch.label}`, value: i, sub: choiceSummary(ch) + "　" + choiceTone(ch) })),
       }).then((v) => {
-        if (v !== null && v !== undefined && !node._done) { node._done = true; CURRENT_REIGN_NODE = null; if (node._finish) node._finish(v); }
+        if (v !== null && v !== undefined && !node._done) { node._done = true; CURRENT_QUAD_NODE = null; if (node._finish) node._finish(v); }
       });
     };
 
-    CURRENT_REIGN_NODE = node;
+    CURRENT_QUAD_NODE = node;
     return new Promise((resolve) => {
       node._finish = (v) => resolve(v);
       present(node);
+      const firstEnabled = grid.querySelector(".quad-cell:not(.disabled)");
+      if (firstEnabled && firstEnabled.focus) firstEnabled.focus();
     });
   }
   afterCard(state, card, choiceOf) {
@@ -1895,7 +1969,10 @@ class GUIController extends Controller {
     return new Promise((resolve) => {
       node._finish = () => resolve(null);
       btn.addEventListener("click", () => { if (node._finish) node._finish(); });
-      present(node, state.observer ? 900 : 2600);
+      // 自动翻页时长随旁白字数伸缩：旁白由 10–15 字扩到 25–48 字后，固定 2600ms 读不完。
+      // 120ms/字 + 1400ms 起步、保底 2600ms → 折算 5.7–6.7 字/秒，落在中文默读舒适区（5–8 字/秒）
+      // 中部；实战均长 43.6 字≈6.7s、上界 48 字≈7.2s。observer 旁观仍走 900ms 快进。
+      present(node, state.observer ? 900 : Math.max(2600, 1400 + text.length * 120));
     });
   }
 }
@@ -2076,18 +2153,17 @@ function initApp() {
   };
   const startBtn = document.getElementById("start-btn");
   if (startBtn) startBtn.addEventListener("click", onStart);
-  // 键盘：Reigns 二选一卡激活时 ←/→(A/D) 选择、数字展开全部；否则数字键选择 .opt-btn（无障碍）
+  // 键盘：四象限卡激活时 1–4 直接选格、5–9 展开全部；否则数字键选择 .opt-btn（无障碍）
   document.addEventListener("keydown", (e) => {
     if (!DOM || DOM.game.hidden) return;
-    const rn = CURRENT_REIGN_NODE;
-    if (rn && !rn._done) {
-      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") { e.preventDefault(); if (rn._left) rn._left(); }
-      else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") { e.preventDefault(); if (rn._right) rn._right(); }
-      else if (e.key >= "1" && e.key <= "6") { e.preventDefault(); if (rn._expand) rn._expand(); }
+    const qn = CURRENT_QUAD_NODE;
+    if (qn && !qn._done) {
+      if (e.key >= "1" && e.key <= "4") { e.preventDefault(); if (qn._chooseKey) qn._chooseKey(e.key); }
+      else if (e.key >= "5" && e.key <= "9") { e.preventDefault(); if (qn._expand) qn._expand(); }
       return;
     }
     const n = parseInt(e.key, 10);
-    if (n >= 1 && n <= 6) {
+    if (n >= 1 && n <= 9) {
       const opts = DOM.stage.querySelectorAll(".opt-btn");
       if (opts[n - 1]) { e.preventDefault(); opts[n - 1].click(); }
     }
